@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated platform scaffolding (NÃO commitar, build regenerável)
+linux/
+macos/
+web/
+windows/
