@@ -101,7 +101,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
+  Future<void> _pickDate(BuildContext context) async {
     final date = await showDatePicker(
       context: context,
       initialDate: _dataHora,
@@ -111,7 +111,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     );
     if (date == null || !mounted) return;
     final time = await showTimePicker(
-      context: context,
+      context: this.context,
       initialTime: TimeOfDay.fromDateTime(_dataHora),
     );
     if (!mounted) return;
@@ -144,9 +144,21 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     Navigator.of(context).pop();
   }
 
-  Future<bool> _onWillPop() async {
-    if (!_isEdit && !hasUnsavedChanges) return true;
-    final confirmed = await showDialog<bool>(
+  Expense _buildNew() {
+    final d = widget.fromDraft;
+    return Expense(
+      valorCentavos: 0,
+      dataHora: _dataHora,
+      categoria: _categoria,
+      forma: _forma,
+      origem: d != null ? ExpenseOrigin.ocr : ExpenseOrigin.manual,
+      fotoPath: d?.fotoPath,
+      rawText: d?.draft.textoOcr,
+    );
+  }
+
+  Future<bool> _showCancelConfirmation() async {
+    return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -166,31 +178,26 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
           ),
         ],
       ),
-    );
-    return confirmed ?? false;
+    ).then<bool>((value) => value ?? false);
   }
 
-  Expense _buildNew() {
-    final d = widget.fromDraft;
-    return Expense(
-      valorCentavos: 0,
-      dataHora: _dataHora,
-      categoria: _categoria,
-      forma: _forma,
-      origem: d != null ? ExpenseOrigin.ocr : ExpenseOrigin.manual,
-      fotoPath: d?.fotoPath,
-      rawText: d?.draft.textoOcr,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final d = widget.fromDraft;
     return PopScope(
       canPop: !hasUnsavedChanges,
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        _onWillPop();
+        // O usuário tentou voltar com mudanças não salvas — pedir confirmação.
+        if (!hasUnsavedChanges) {
+          Navigator.of(this.context).pop();
+          return;
+        }
+        final confirmed = await _showCancelConfirmation();
+        if (confirmed == true && mounted) {
+          Navigator.of(this.context).pop();
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -278,15 +285,17 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 onChanged: (p) => setState(() => _forma = p!),
               ),
               const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.event),
-                title: const Text('Data e hora'),
-                subtitle:
-                    Text(DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(
-                        _dataHora)),
-                trailing: const Icon(Icons.edit_calendar),
-                onTap: _pickDate,
+              Builder(
+                builder: (context) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event),
+                  title: const Text('Data e hora'),
+                  subtitle:
+                      Text(DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(
+                          _dataHora)),
+                  trailing: const Icon(Icons.edit_calendar),
+                  onTap: () => _pickDate(context),
+                ),
               ),
               if (d != null)
                 ExpansionTile(
