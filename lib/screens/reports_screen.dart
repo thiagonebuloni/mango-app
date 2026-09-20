@@ -1,22 +1,24 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../db/db.dart';
+import '../state/providers.dart';
 import '../models/models.dart';
 import '../widgets/common.dart';
 
 /// Relatório por período, categoria e forma de pagamento.
-class ReportsScreen extends StatefulWidget {
+class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  State<ReportsScreen> createState() => _ReportsScreenState();
+  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
 }
 
 enum _Period { mes, ultimos30, ano, custom }
 
-class _ReportsScreenState extends State<ReportsScreen> {
+class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   _Period _period = _Period.mes;
   DateTimeRange? _custom;
 
@@ -27,28 +29,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
         final m0 = DateTime(now.year, now.month);
         return DateTimeRange(start: m0, end: now);
       case _Period.ultimos30:
-        final start =
-            Periods.startOfDay(now).subtract(const Duration(days: 29));
+        final start = Periods.startOfDay(now).subtract(const Duration(days: 29));
         return DateTimeRange(start: start, end: now);
       case _Period.ano:
         final y0 = DateTime(now.year);
         return DateTimeRange(start: y0, end: now);
       case _Period.custom:
-        return _custom ??
-            DateTimeRange(start: Periods.startOfMonth(now), end: now);
+        return _custom ?? DateTimeRange(start: Periods.startOfMonth(now), end: now);
     }
   }
 
   Future<void> _pickCustom() async {
     final now = DateTime.now();
+    final currentRange = range;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: now,
-      initialDateRange: range,
+      initialDateRange: currentRange,
       locale: const Locale('pt', 'BR'),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     setState(() {
       _period = _Period.custom;
       _custom = picked;
@@ -57,92 +58,77 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final r = range;
-    // end exclusivo: cobre o dia inteiro da data final
-    final endEx = r.end.add(const Duration(days: 1));
-    final categoriesFuture = DBHelper.instance.sumByCategory(r.start, endEx);
-    final paymentsFuture = DBHelper.instance.sumByPayment(r.start, endEx);
-    final totalFuture = DBHelper.instance.totalBetween(r.start, endEx);
+    final expensesAsync = ref.watch(expensesForReportsProvider);
 
-    final label = DateFormat('dd/MM/yyyy', 'pt_BR');
     return Scaffold(
       appBar: AppBar(title: const Text('Relatórios')),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          SegmentedButton<_Period>(
-            segments: const [
-              ButtonSegment(value: _Period.mes, label: Text('Mês')),
-              ButtonSegment(value: _Period.ultimos30, label: Text('30 dias')),
-              ButtonSegment(value: _Period.ano, label: Text('Ano')),
-              ButtonSegment(value: _Period.custom, label: Text('Custom')),
+      body: expensesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Erro ao carregar dados: $e')),
+        data: (expenses) {
+          final r = range;
+          final label = DateFormat('dd/MM/yyyy', 'pt_BR');
+          final pr = periodRange(DateTime.now(), _period.index, _custom);
+          final inPeriod = expenses.where((e) => pr.contains(e.dataHora)).toList();
+          final byCategory = sumByCategory(inPeriod);
+          final byPayment = sumByPayment(inPeriod);
+          final total = totalOf(inPeriod);
+
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            children: [
+              SegmentedButton<_Period>(
+                segments: const [
+                  ButtonSegment(value: _Period.mes, label: Text('Mês')),
+                  ButtonSegment(value: _Period.ultimos30, label: Text('30 dias')),
+                  ButtonSegment(value: _Period.ano, label: Text('Ano')),
+                  ButtonSegment(value: _Period.custom, label: Text('Custom')),
+                ],
+                selected: {_period},
+                onSelectionChanged: (s) {
+                  if (s.first == _Period.custom) {
+                    _pickCustom();
+                  } else {
+                    setState(() => _period = s.first);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  '${label.format(r.start)} – ${label.format(r.end)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Total do período', style: TextStyle(fontWeight: FontWeight.bold)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Text(
+                  formatBRL(total),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (inPeriod.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: Text('Sem gastos no período.')),
+                )
+              else
+                Column(
+                  children: [
+                    _CategoryCard(data: byCategory),
+                    const SizedBox(height: 16),
+                    _PaymentCard(data: byPayment),
+                  ],
+                ),
             ],
-            selected: {_period},
-            onSelectionChanged: (s) {
-              if (s.first == _Period.custom) {
-                _pickCustom();
-              } else {
-                setState(() => _period = s.first);
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              '${label.format(r.start)} – ${label.format(r.end)}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text('Total do período',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          FutureBuilder<int>(
-            future: totalFuture,
-            builder: (context, snap) => Text(
-              formatBRL(snap.data ?? 0),
-              style:
-                  const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text('Por categoria',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<Map<Category, int>>(
-            future: categoriesFuture,
-            builder: (context, snap) {
-              final data = snap.data ?? const {};
-              if (data.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(child: Text('Sem gastos no período.')),
-                );
-              }
-              return _CategoryCard(data: data);
-            },
-          ),
-          const SizedBox(height: 8),
-          const Text('Por forma de pagamento',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<Map<PaymentMethod, int>>(
-            future: paymentsFuture,
-            builder: (context, snap) {
-              final data = snap.data ?? const {};
-              if (data.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(child: Text('Sem gastos no período.')),
-                );
-              }
-              return _PaymentList(data: data);
-            },
-          ),
-        ],
+          );
+        },
       ),
     );
   }
-
 }
 
 class _CategoryCard extends StatelessWidget {
@@ -193,11 +179,9 @@ class _CategoryCard extends StatelessWidget {
                           Icon(Icons.circle, size: 12, color: entry.key.color),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Text(entry.key.label,
-                                style: const TextStyle(fontSize: 13)),
+                            child: Text(entry.key.label, style: const TextStyle(fontSize: 13)),
                           ),
-                          Text(formatBRL(entry.value),
-                              style: const TextStyle(fontSize: 13)),
+                          Text(formatBRL(entry.value), style: const TextStyle(fontSize: 13)),
                         ],
                       ),
                     ),
@@ -211,10 +195,10 @@ class _CategoryCard extends StatelessWidget {
   }
 }
 
-class _PaymentList extends StatelessWidget {
+class _PaymentCard extends StatelessWidget {
   final Map<PaymentMethod, int> data;
 
-  const _PaymentList({required this.data});
+  const _PaymentCard({required this.data});
 
   @override
   Widget build(BuildContext context) {

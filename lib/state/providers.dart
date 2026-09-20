@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/db.dart';
@@ -15,7 +16,6 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
 
   Future<void> add(Expense expense) async {
     await DBHelper.instance.insertExpense(expense);
-    // Aprende: estabelecimento → categoria usada.
     if (expense.estabelecimento.trim().isNotEmpty) {
       await DBHelper.instance.memorizeMerchant(
               ReceiptParser.normalizeMerchant(expense.estabelecimento),
@@ -65,4 +65,66 @@ PeriodSummary summarize(List<Expense> expenses, DateTime now) {
     if (!e.dataHora.isBefore(m0)) mes += e.valorCentavos;
   }
   return PeriodSummary(dia: dia, semana: semana, mes: mes);
+}
+
+/// Relatórios: gastos do período em aberto, reativos ao expensesProvider.
+class ExpensesForReports extends AsyncNotifier<List<Expense>> {
+  @override
+  Future<List<Expense>> build() => DBHelper.instance.allExpenses();
+}
+
+final expensesForReportsProvider =
+    AsyncNotifierProvider<ExpensesForReports, List<Expense>>(
+        ExpensesForReports.new);
+
+PeriodRange periodRange(DateTime now, dynamic period, DateTimeRange? custom) {
+  final m0 = DateTime(now.year, now.month);
+  final w0 = Periods.startOfDay(now).subtract(const Duration(days: 29));
+  final y0 = DateTime(now.year);
+  switch (period) {
+    case 0:
+      return PeriodRange(start: m0, end: now);
+    case 1:
+      return PeriodRange(start: w0, end: now);
+    case 2:
+      return PeriodRange(start: y0, end: now);
+    case 3:
+      final c = custom ?? DateTimeRange(start: m0, end: now);
+      return PeriodRange(start: c.start, end: c.end);
+  }
+  return PeriodRange(start: m0, end: now);
+}
+
+Map<Category, int> sumByCategory(Iterable<Expense> expenses) {
+  final map = <Category, int>{};
+  for (final e in expenses) {
+    map[e.categoria] = (map[e.categoria] ?? 0) + e.valorCentavos;
+  }
+  return map;
+}
+
+Map<PaymentMethod, int> sumByPayment(Iterable<Expense> expenses) {
+  final map = <PaymentMethod, int>{};
+  for (final e in expenses) {
+    map[e.forma] = (map[e.forma] ?? 0) + e.valorCentavos;
+  }
+  return map;
+}
+
+int totalOf(Iterable<Expense> expenses) {
+  int t = 0;
+  for (final e in expenses) {
+    t += e.valorCentavos;
+  }
+  return t;
+}
+
+class PeriodRange {
+  final DateTime start;
+  final DateTime end;
+  const PeriodRange({required this.start, required this.end});
+
+  DateTime get endExclusive => end.add(const Duration(days: 1));
+
+  bool contains(DateTime dt) => !dt.isBefore(start) && dt.isBefore(endExclusive);
 }
