@@ -49,6 +49,31 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   bool get _isEdit => widget.expense != null;
   bool _saving = false;
 
+  bool get hasUnsavedChanges {
+    final e = widget.expense;
+    final d = widget.fromDraft;
+    final total = e?.valorCentavos ?? d?.draft.totalCentavos;
+    final currentCentavos = parseMoneyInput(_valor.text);
+    if (currentCentavos == null || currentCentavos != total) return true;
+    final currentEstabelecimento = _estabelecimento.text.trim();
+    final originalEstabelecimento =
+        e?.estabelecimento ?? d?.draft.estabelecimento ?? '';
+    if (currentEstabelecimento != originalEstabelecimento) return true;
+    final currentDescricao = _descricao.text.trim();
+    final originalDescricao = e?.descricao ?? '';
+    if (currentDescricao != originalDescricao) return true;
+    if (_categoria != (e?.categoria ?? d?.categoria ?? Category.outros)) {
+      return true;
+    }
+    if (_forma != (e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros)) {
+      return true;
+    }
+    if (_dataHora != (e?.dataHora ?? d?.draft.dataHora ?? DateTime.now())) {
+      return true;
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +91,14 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _categoria = e?.categoria ?? d?.categoria ?? Category.outros;
     _forma = e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros;
     _dataHora = e?.dataHora ?? d?.draft.dataHora ?? DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _valor.dispose();
+    _estabelecimento.dispose();
+    _descricao.dispose();
+    super.dispose();
   }
 
   Future<void> _pickDate() async {
@@ -111,6 +144,32 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<bool> _onWillPop() async {
+    if (!_isEdit && !hasUnsavedChanges) return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar lançamento?'),
+        content: const Text(
+          'Você tem informações não salvas. Deseja cancelar e perder '
+          'todas as alterações?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Continua editando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sim, cancelar'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Expense _buildNew() {
     final d = widget.fromDraft;
     return Expense(
@@ -127,120 +186,135 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   @override
   Widget build(BuildContext context) {
     final d = widget.fromDraft;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEdit ? 'Editar gasto' : 'Novo gasto'),
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (d != null) ...[
-              Card(
-                color: Colors.teal.withValues(alpha: 0.08),
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.receipt_long, color: Colors.teal),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Dados extraídos do cupom.\nConfira antes de salvar.',
-                          style: TextStyle(color: Colors.teal),
+    return PopScope(
+      canPop: !hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _onWillPop();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_isEdit ? 'Editar gasto' : 'Novo gasto'),
+        ),
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (d != null) ...[
+                Card(
+                  color: Colors.teal.withValues(alpha: 0.08),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.receipt_long,
+                            color: Colors.teal),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Dados extraídos do cupom.\nConfira '
+                            'antes de salvar.',
+                            style: TextStyle(color: Colors.teal),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            TextFormField(
-              controller: _valor,
-              decoration: const InputDecoration(
-                labelText: 'Valor (R\$)',
-                prefixText: 'R\$ ',
-                hintText: '0,00',
-              ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                const SizedBox(height: 8),
               ],
-              validator: (v) =>
-                  parseMoneyInput(v ?? '') == null ? 'Informe o valor' : null,
-              autofocus: !_isEdit && d == null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _estabelecimento,
-              decoration: const InputDecoration(labelText: 'Estabelecimento'),
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _descricao,
-              decoration:
-                  const InputDecoration(labelText: 'Descrição (opcional)'),
-              textCapitalization: TextCapitalization.sentences,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<Category>(
-              initialValue: _categoria,
-              decoration: const InputDecoration(labelText: 'Categoria'),
-              items: [
-                for (final c in Category.values)
-                  DropdownMenuItem(value: c, child: Text(c.label)),
-              ],
-              onChanged: (c) => setState(() => _categoria = c!),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<PaymentMethod>(
-              initialValue: _forma,
-              decoration:
-                  const InputDecoration(labelText: 'Forma de pagamento'),
-              items: [
-                for (final p in PaymentMethod.values)
-                  DropdownMenuItem(value: p, child: Text(p.label)),
-              ],
-              onChanged: (p) => setState(() => _forma = p!),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event),
-              title: const Text('Data e hora'),
-              subtitle: Text(
-                  DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(_dataHora)),
-              trailing: const Icon(Icons.edit_calendar),
-              onTap: _pickDate,
-            ),
-            if (d != null)
-              ExpansionTile(
-                leading: const Icon(Icons.text_snippet),
-                title: const Text('Texto lido do cupom'),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(d.draft.textoOcr,
-                        style: const TextStyle(fontSize: 11)),
-                  ),
+              TextFormField(
+                controller: _valor,
+                decoration: const InputDecoration(
+                  labelText: 'Valor (R\$)',
+                  prefixText: 'R\$ ',
+                  hintText: '0,00',
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
                 ],
+                validator: (v) =>
+                    parseMoneyInput(v ?? '') == null
+                        ? 'Informe o valor'
+                        : null,
+                autofocus: !_isEdit && d == null,
               ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              icon: _saving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.check),
-              label: Text(_isEdit ? 'Salvar alterações' : 'Salvar gasto'),
-              onPressed: _saving ? null : _save,
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _estabelecimento,
+                decoration: const InputDecoration(
+                    labelText: 'Estabelecimento'),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descricao,
+                decoration:
+                    const InputDecoration(labelText: 'Descrição (opcional)'),
+                textCapitalization: TextCapitalization.sentences,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<Category>(
+                initialValue: _categoria,
+                decoration: const InputDecoration(labelText: 'Categoria'),
+                items: [
+                  for (final c in Category.values)
+                    DropdownMenuItem(value: c, child: Text(c.label)),
+                ],
+                onChanged: (c) => setState(() => _categoria = c!),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<PaymentMethod>(
+                initialValue: _forma,
+                decoration:
+                    const InputDecoration(labelText: 'Forma de pagamento'),
+                items: [
+                  for (final p in PaymentMethod.values)
+                    DropdownMenuItem(value: p, child: Text(p.label)),
+                ],
+                onChanged: (p) => setState(() => _forma = p!),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event),
+                title: const Text('Data e hora'),
+                subtitle:
+                    Text(DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(
+                        _dataHora)),
+                trailing: const Icon(Icons.edit_calendar),
+                onTap: _pickDate,
+              ),
+              if (d != null)
+                ExpansionTile(
+                  leading: const Icon(Icons.text_snippet),
+                  title: const Text('Texto lido do cupom'),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(d.draft.textoOcr,
+                          style: const TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.check),
+                label:
+                    Text(_isEdit ? 'Salvar alterações' : 'Salvar gasto'),
+                onPressed: _saving ? null : _save,
+              ),
+            ],
+          ),
         ),
       ),
     );
