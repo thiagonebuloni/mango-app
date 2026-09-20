@@ -42,3 +42,9 @@ android {
 flutter {
     source = "../.."
 }
+
+// ML Kit: somente o reconhecedor latino (leve). O canal nativo
+// (financ/ocr em MainActivity.kt) faz o OCR direto, sem plugin.
+dependencies {
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+}
