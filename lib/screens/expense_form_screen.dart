@@ -101,17 +101,24 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDate(BuildContext context) async {
+  Future<void> _pickDate() async {
+    final first = DateTime(2020);
+    final last = DateTime.now().add(const Duration(days: 1));
+    // Garante initialDate dentro do intervalo: fora dele o
+    // showDatePicker falha em assertion e o seletor "não abre".
+    final initial = _dataHora.isBefore(first)
+        ? first
+        : (_dataHora.isAfter(last) ? last : _dataHora);
     final date = await showDatePicker(
       context: context,
-      initialDate: _dataHora,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-      locale: const Locale('pt', 'BR'),
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
     );
-    if (date == null || !mounted) return;
+    if (date == null) return;
+    if (!mounted) return;
     final time = await showTimePicker(
-      context: this.context,
+      context: context,
       initialTime: TimeOfDay.fromDateTime(_dataHora),
     );
     if (!mounted) return;
@@ -285,17 +292,15 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 onChanged: (p) => setState(() => _forma = p!),
               ),
               const SizedBox(height: 12),
-              Builder(
-                builder: (context) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event),
-                  title: const Text('Data e hora'),
-                  subtitle:
-                      Text(DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(
-                          _dataHora)),
-                  trailing: const Icon(Icons.edit_calendar),
-                  onTap: () => _pickDate(context),
-                ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event),
+                title: const Text('Data e hora'),
+                subtitle:
+                    Text(DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(
+                        _dataHora)),
+                trailing: const Icon(Icons.edit_calendar),
+                onTap: _pickDate,
               ),
               if (d != null)
                 ExpansionTile(

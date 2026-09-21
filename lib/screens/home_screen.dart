@@ -99,9 +99,14 @@ class HomeScreen extends ConsumerWidget {
   }
 
   void _showAddMenu(BuildContext context) {
+    // IMPORTANTE: capturar o context da Home (fora do bottom sheet) para o
+    // push. Usar o context do builder após Navigator.pop() significa usar um
+    // context desmontado — a rota empilhada a partir dele fica quebrada e
+    // diálogos modais (showDatePicker/showTimePicker) não abrem nela.
+    final pageContext = context;
     showModalBottomSheet<void>(
-      context: context,
-      builder: (context) => SafeArea(
+      context: pageContext,
+      builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -110,8 +115,8 @@ class HomeScreen extends ConsumerWidget {
               title: const Text('Foto do cupom fiscal'),
               subtitle: const Text('O app lê e preenche os dados'),
               onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
+                Navigator.pop(sheetContext);
+                Navigator.of(pageContext).push(
                   MaterialPageRoute(builder: (_) => const CaptureScreen()),
                 );
               },
@@ -120,8 +125,8 @@ class HomeScreen extends ConsumerWidget {
               leading: const Icon(Icons.edit),
               title: const Text('Lançamento manual'),
               onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
+                Navigator.pop(sheetContext);
+                Navigator.of(pageContext).push(
                   MaterialPageRoute(builder: (_) => const ExpenseFormScreen()),
                 );
               },
