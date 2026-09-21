@@ -1,11 +1,11 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart' show DateFormat;
+import 'package:intl/intl.dart';
 
 import '../db/db.dart';
-import '../state/providers.dart';
 import '../models/models.dart';
+import '../state/providers.dart';
 import '../widgets/common.dart';
 
 /// Relatório por período, categoria e forma de pagamento.
@@ -41,13 +41,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   Future<void> _pickCustom() async {
     final now = DateTime.now();
-    final currentRange = range;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: now,
-      initialDateRange: currentRange,
-      locale: const Locale('pt', 'BR'),
+      initialDateRange: range,
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -56,76 +54,126 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     });
   }
 
+  void _invalidate() => ref.invalidate(expensesForReportsProvider);
+
   @override
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesForReportsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Relatórios')),
+      floatingActionButton: NewExpenseMenu(heroTag: 'fab_reports', onAdded: _invalidate),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar dados: $e')),
         data: (expenses) {
-          final r = range;
-          final label = DateFormat('dd/MM/yyyy', 'pt_BR');
           final pr = periodRange(DateTime.now(), _period.index, _custom);
           final inPeriod = expenses.where((e) => pr.contains(e.dataHora)).toList();
           final byCategory = sumByCategory(inPeriod);
           final byPayment = sumByPayment(inPeriod);
           final total = totalOf(inPeriod);
+          final byDay = sumByDay(inPeriod);
 
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              SegmentedButton<_Period>(
-                segments: const [
-                  ButtonSegment(value: _Period.mes, label: Text('Mês')),
-                  ButtonSegment(value: _Period.ultimos30, label: Text('30 dias')),
-                  ButtonSegment(value: _Period.ano, label: Text('Ano')),
-                  ButtonSegment(value: _Period.custom, label: Text('Custom')),
-                ],
-                selected: {_period},
-                onSelectionChanged: (s) {
-                  if (s.first == _Period.custom) {
-                    _pickCustom();
-                  } else {
-                    setState(() => _period = s.first);
-                  }
-                },
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text(
-                  '${label.format(r.start)} – ${label.format(r.end)}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Total do período', style: TextStyle(fontWeight: FontWeight.bold)),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                child: Text(
-                  formatBRL(total),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (inPeriod.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(child: Text('Sem gastos no período.')),
-                )
-              else
-                Column(
-                  children: [
-                    _CategoryCard(data: byCategory),
-                    const SizedBox(height: 16),
-                    _PaymentCard(data: byPayment),
+          return RefreshIndicator(
+            onRefresh: () async => _invalidate(),
+            child: ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                SegmentedButton<_Period>(
+                  segments: const [
+                    ButtonSegment(value: _Period.mes, label: Text('Mês')),
+                    ButtonSegment(value: _Period.ultimos30, label: Text('30 dias')),
+                    ButtonSegment(value: _Period.ano, label: Text('Ano')),
+                    ButtonSegment(value: _Period.custom, label: Text('Custom')),
                   ],
+                  selected: {_period},
+                  onSelectionChanged: (s) {
+                    if (s.first == _Period.custom) {
+                      _pickCustom();
+                    } else {
+                      setState(() => _period = s.first);
+                    }
+                  },
                 ),
-            ],
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    '${DateFormat('dd/MM/yyyy', 'pt_BR').format(pr.start)} — '
+                    '${DateFormat('dd/MM/yyyy', 'pt_BR').format(pr.end)}',
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(formatBRL(total),
+                      style: const TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 16),
+                if (byDay.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text('Sem gastos no período.')),
+                  )
+                else
+                  _DaySummaryCard(dayMap: byDay),
+                const SizedBox(height: 16),
+                if (byCategory.isEmpty && byPayment.isEmpty)
+                  const Center(child: Text('Sem dados para visualização.'))
+                else ...[
+                  if (byCategory.isNotEmpty) _CategoryCard(data: byCategory),
+                  const SizedBox(height: 16),
+                  if (byPayment.isNotEmpty) _PaymentCard(data: byPayment),
+                ],
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _DaySummaryCard extends StatelessWidget {
+  final Map<DateTime, int> dayMap;
+
+  const _DaySummaryCard({required this.dayMap});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = sortedDays(dayMap);
+    final df = DateFormat('EEE, dd/MM', 'pt_BR');
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Gastos por dia',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          ...days.map((day) => ListTile(
+                leading: CircleAvatar(
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  child: Text(
+                    DateFormat('dd', 'pt_BR').format(day),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
+                  ),
+                ),
+                title: Text(
+                  df.format(day),
+                  style: const TextStyle(fontSize: 13),
+                ),
+                trailing: Text(formatBRL(dayMap[day]!),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 15)),
+              )),
+        ],
       ),
     );
   }
@@ -179,9 +227,11 @@ class _CategoryCard extends StatelessWidget {
                           Icon(Icons.circle, size: 12, color: entry.key.color),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Text(entry.key.label, style: const TextStyle(fontSize: 13)),
+                            child: Text(entry.key.label,
+                                style: const TextStyle(fontSize: 13)),
                           ),
-                          Text(formatBRL(entry.value), style: const TextStyle(fontSize: 13)),
+                          Text(formatBRL(entry.value),
+                              style: const TextStyle(fontSize: 13)),
                         ],
                       ),
                     ),

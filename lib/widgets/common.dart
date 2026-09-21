@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
+import '../screens/capture_screen.dart';
+import '../screens/expense_form_screen.dart';
 
 final _brl = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$', decimalDigits: 2);
 
@@ -89,7 +91,63 @@ class ExpenseTile extends StatelessWidget {
       ),
       trailing: Text(
         formatBRL(e.valorCentavos),
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+      ),
+    );
+  }
+}
+
+/// Widget reutilizável: FAB + bottom sheet para iniciar um novo lançamento.
+///
+/// Usado por [HomeScreen] e [ReportsScreen] para garantir que o botão
+/// "Novo Gasto" esteja acessível em todas as telas. O [heroTag] deve ser
+/// único por tela para evitar conflitos entre FABs no mesmo Navigator.
+class NewExpenseMenu extends StatelessWidget {
+  final String heroTag;
+  final VoidCallback? onAdded;
+
+  const NewExpenseMenu({super.key, required this.heroTag, this.onAdded});
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton.large(
+      heroTag: heroTag,
+      onPressed: () => _showAddMenu(context),
+      child: const Icon(Icons.add),
+    );
+  }
+
+  void _showAddMenu(BuildContext pageContext) {
+    showModalBottomSheet<void>(
+      context: pageContext,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Foto do cupom fiscal'),
+              subtitle: const Text('O app lê e preenche os dados'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(pageContext).push(
+                  MaterialPageRoute(builder: (_) => const CaptureScreen()),
+                ).then((_) => onAdded?.call());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Lançamento manual'),
+              subtitle: const Text('Digite o gasto à mão'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(pageContext).push(
+                  MaterialPageRoute(builder: (_) => const ExpenseFormScreen()),
+                ).then((_) => onAdded?.call());
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

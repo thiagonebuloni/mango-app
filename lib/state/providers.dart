@@ -119,6 +119,24 @@ int totalOf(Iterable<Expense> expenses) {
   return t;
 }
 
+/// Agrupa gastos por dia, retornando um mapa onde a chave é a data (sem hora)
+/// e o valor é o total em centavos daquele dia.
+Map<DateTime, int> sumByDay(Iterable<Expense> expenses) {
+  final map = <DateTime, int>{};
+  for (final e in expenses) {
+    final day = DateTime(e.dataHora.year, e.dataHora.month, e.dataHora.day);
+    map[day] = (map[day] ?? 0) + e.valorCentavos;
+  }
+  return map;
+}
+
+/// Retorna uma lista de [DateTime] chaveados por dia, ordenados do mais
+/// recente para o mais antigo.
+List<DateTime> sortedDays(Map<DateTime, int> dayMap) {
+  return dayMap.keys.toList()
+    ..sort((a, b) => b.compareTo(a));
+}
+
 class PeriodRange {
   final DateTime start;
   final DateTime end;

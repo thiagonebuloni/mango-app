@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../screens/expense_form_screen.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
-import 'capture_screen.dart';
-import 'expense_form_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -15,20 +14,14 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Meus gastos')),
-      floatingActionButton: FloatingActionButton.large(
-        heroTag: 'fab',
-        onPressed: () => _showAddMenu(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: const NewExpenseMenu(heroTag: 'fab'),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar: $e')),
         data: (expenses) {
-          final summary =
-              summarize(expenses, DateTime.now());
+          final summary = summarize(expenses, DateTime.now());
           final monthExpenses = expenses.where((e) {
-            final m0 =
-                DateTime(DateTime.now().year, DateTime.now().month);
+            final m0 = DateTime(DateTime.now().year, DateTime.now().month);
             return !e.dataHora.isBefore(m0);
           }).toList();
 
@@ -41,16 +34,11 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                     child: Row(
                       children: [
-                        _SummaryCard(
-                            label: 'Dia', value: summary.dia, flex: 1),
+                        _SummaryCard(label: 'Dia', value: summary.dia, flex: 1),
                         const SizedBox(width: 8),
-                        _SummaryCard(
-                            label: 'Semana',
-                            value: summary.semana,
-                            flex: 1),
+                        _SummaryCard(label: 'Semana', value: summary.semana, flex: 1),
                         const SizedBox(width: 8),
-                        _SummaryCard(
-                            label: 'Mês', value: summary.mes, flex: 1),
+                        _SummaryCard(label: 'Mês', value: summary.mes, flex: 1),
                       ],
                     ),
                   ),
@@ -97,45 +85,6 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
-
-  void _showAddMenu(BuildContext context) {
-    // IMPORTANTE: capturar o context da Home (fora do bottom sheet) para o
-    // push. Usar o context do builder após Navigator.pop() significa usar um
-    // context desmontado — a rota empilhada a partir dele fica quebrada e
-    // diálogos modais (showDatePicker/showTimePicker) não abrem nela.
-    final pageContext = context;
-    showModalBottomSheet<void>(
-      context: pageContext,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera),
-              title: const Text('Foto do cupom fiscal'),
-              subtitle: const Text('O app lê e preenche os dados'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(pageContext).push(
-                  MaterialPageRoute(builder: (_) => const CaptureScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Lançamento manual'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(pageContext).push(
-                  MaterialPageRoute(builder: (_) => const ExpenseFormScreen()),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -143,8 +92,7 @@ class _SummaryCard extends StatelessWidget {
   final int value;
   final int flex;
 
-  const _SummaryCard(
-      {required this.label, required this.value, required this.flex});
+  const _SummaryCard({required this.label, required this.value, required this.flex});
 
   @override
   Widget build(BuildContext context) {
