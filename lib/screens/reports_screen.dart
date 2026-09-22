@@ -90,7 +90,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           return RefreshIndicator(
             onRefresh: () async => _invalidate(),
             child: ListView(
-              padding: const EdgeInsets.all(12),
+              // Reserva o espaço do FAB grande no fim da página: sem isso o
+              // botão cobre os últimos gráficos/cartões e a lista não rola o
+              // bastante para deixá-los acima dele.
+              padding: EdgeInsets.fromLTRB(
+                12,
+                12,
+                12,
+                12 + newExpenseFabClearance(context),
+              ),
               children: [
                 // Barra de períodos centralizada. O ToggleButtons monta um
                 // Row com mainAxisSize.min, mas dentro de um ListView a

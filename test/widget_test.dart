@@ -9,15 +9,36 @@ import 'package:financ/screens/expense_form_screen.dart';
 import 'package:financ/screens/home_screen.dart';
 import 'package:financ/screens/reports_screen.dart';
 import 'package:financ/state/providers.dart';
+import 'package:financ/widgets/common.dart';
 
 class _FakeExpensesNotifier extends ExpensesNotifier {
+  _FakeExpensesNotifier([this._expenses = const []]);
+
+  final List<Expense> _expenses;
+
   @override
-  Future<List<Expense>> build() async => const [];
+  Future<List<Expense>> build() async => _expenses;
 }
 
 class _FakeReportsNotifier extends ExpensesForReports {
+  _FakeReportsNotifier([this._expenses = const []]);
+
+  final List<Expense> _expenses;
+
   @override
-  Future<List<Expense>> build() async => const [];
+  Future<List<Expense>> build() async => _expenses;
+}
+
+/// Gasto de hoje (meio-dia) para as telas com dados — sempre cai no mês atual.
+Expense _gasto(int i) {
+  final now = DateTime.now();
+  return Expense(
+    valorCentavos: 1000 + i * 100,
+    dataHora: DateTime(now.year, now.month, now.day, 12),
+    categoria: Category.mercado,
+    forma: PaymentMethod.dinheiro,
+    estabelecimento: 'MERCADO TESTE $i',
+  );
 }
 
 void main() async {
@@ -112,6 +133,59 @@ void main() async {
         tester.getCenter(find.byType(ToggleButtons)).dx,
         moreOrLessEquals(screenWidth / 2, epsilon: 1),
         reason: 'a barra de períodos deve ficar centralizada',
+      );
+    });
+  });
+
+  group('FAB não cobre o conteúdo', () {
+    testWidgets('HomeScreen: último gasto fica acima do FAB', (tester) async {
+      final gastos = [for (var i = 0; i < 8; i++) _gasto(i)];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier(gastos)),
+          ],
+          child: _makeApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Rola a lista até o fim.
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -1500));
+      await tester.pumpAndSettle();
+
+      final fabTop = tester.getTopLeft(find.byType(FloatingActionButton)).dy;
+      final lastTileBottom =
+          tester.getBottomLeft(find.byType(ExpenseTile).last).dy;
+      expect(
+        lastTileBottom,
+        lessThan(fabTop),
+        reason: 'a lista deve rolar até deixar o último gasto acima do FAB',
+      );
+    });
+
+    testWidgets('ReportsScreen: cartões ficam acima do FAB', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier([_gasto(0)])),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Rola a página até o fim.
+      await tester.drag(find.byType(ListView), const Offset(0, -1500));
+      await tester.pumpAndSettle();
+
+      final fabTop = tester.getTopLeft(find.byType(FloatingActionButton)).dy;
+      final lastCardBottom = tester.getBottomLeft(find.byType(Card).last).dy;
+      expect(
+        lastCardBottom,
+        lessThan(fabTop),
+        reason: 'a página deve rolar até os dados ficarem acima do FAB',
       );
     });
   });

@@ -64,7 +64,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   )
-                else
+                else ...[
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, i) {
@@ -81,6 +81,11 @@ class HomeScreen extends ConsumerWidget {
                       childCount: monthExpenses.length,
                     ),
                   ),
+                  // Espaço para o FAB grande não esconder o último gasto.
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: newExpenseFabClearance(context)),
+                  ),
+                ],
               ],
             ),
           );

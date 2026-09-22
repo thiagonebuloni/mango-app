@@ -97,6 +97,20 @@ class ExpenseTile extends StatelessWidget {
   }
 }
 
+/// Altura do FAB usado por [NewExpenseMenu] (`FloatingActionButton.large`).
+/// O Material define 96x96 tanto no M2 quanto no M3.
+const double kNewExpenseFabSize = 96;
+
+/// Espaço vertical que o [NewExpenseMenu] ocupa sobre o conteúdo: altura do
+/// FAB + margem de respiro acima/abaixo + área segura do aparelho.
+///
+/// Use como padding inferior (ou espaçador final) de listas roláveis, senão o
+/// botão cobre o último item e a página não rola o suficiente para vê-lo.
+double newExpenseFabClearance(BuildContext context) =>
+    kNewExpenseFabSize +
+    kFloatingActionButtonMargin * 2 +
+    MediaQuery.paddingOf(context).bottom;
+
 /// Widget reutilizável: FAB + bottom sheet para iniciar um novo lançamento.
 ///
 /// Usado por [HomeScreen] e [ReportsScreen] para garantir que o botão

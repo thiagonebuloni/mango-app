@@ -33,7 +33,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 23 testes (parser do cupom + categorizador + UI)
+flutter test      # 25 testes (parser do cupom + categorizador + UI)
 ```
 
 ## Rodando o app
