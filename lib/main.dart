@@ -48,18 +48,46 @@ class RootNav extends StatefulWidget {
 }
 
 class _RootNavState extends State<RootNav> {
+  final _pageController = PageController();
   int _index = 0;
+
+  void _onPageChanged(int index) {
+    if (index != _index) {
+      setState(() => _index = index);
+    }
+  }
+
+  void _onDestinationSelected(int index) {
+    if (index != _index) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: const [HomeScreen(), ReportsScreen()],
+      body: PageView(
+        controller: _pageController,
+        physics: const BouncingScrollPhysics(),
+        onPageChanged: _onPageChanged,
+        children: const [
+          HomeScreen(),
+          ReportsScreen(),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),

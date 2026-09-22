@@ -8,7 +8,7 @@ import '../models/models.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 
-/// Relatório por período, categoria e forma de pagamento.
+/// Relatorio por periodo, categoria e forma de pagamento.
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -20,37 +20,47 @@ enum _Period { mes, ultimos30, ano, custom }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   _Period _period = _Period.mes;
-  DateTimeRange? _custom;
+  // Armazena o dia inicial e final do periodo custom (sem hora)
+  DateTime? _customStart;
+  DateTime? _customEnd;
 
-  DateTimeRange get range {
+  PeriodRange get periodRange {
     final now = DateTime.now();
     switch (_period) {
       case _Period.mes:
         final m0 = DateTime(now.year, now.month);
-        return DateTimeRange(start: m0, end: now);
+        return PeriodRange(start: m0, end: now);
       case _Period.ultimos30:
         final start = Periods.startOfDay(now).subtract(const Duration(days: 29));
-        return DateTimeRange(start: start, end: now);
+        return PeriodRange(start: start, end: now);
       case _Period.ano:
         final y0 = DateTime(now.year);
-        return DateTimeRange(start: y0, end: now);
+        return PeriodRange(start: y0, end: now);
       case _Period.custom:
-        return _custom ?? DateTimeRange(start: Periods.startOfMonth(now), end: now);
+        return PeriodRange(
+          start: _customStart ?? DateTime(now.year, now.month),
+          end: _customEnd ?? now,
+        );
     }
   }
 
   Future<void> _pickCustom() async {
     final now = DateTime.now();
+    final pr = periodRange;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: now,
-      initialDateRange: range,
+      initialDateRange: DateTimeRange(
+        start: pr.start,
+        end: pr.end,
+      ),
     );
     if (picked == null || !mounted) return;
     setState(() {
       _period = _Period.custom;
-      _custom = picked;
+      _customStart = picked.start;
+      _customEnd = picked.end;
     });
   }
 
@@ -62,12 +72,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Relatórios')),
-      floatingActionButton: NewExpenseMenu(heroTag: 'fab_reports', onAdded: _invalidate),
+      floatingActionButton: NewExpenseMenu(
+        heroTag: 'fab_reports',
+        onAdded: () => ref.invalidate(expensesProvider),
+      ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar dados: $e')),
         data: (expenses) {
-          final pr = periodRange(DateTime.now(), _period.index, _custom);
+          final pr = periodRange;
           final inPeriod = expenses.where((e) => pr.contains(e.dataHora)).toList();
           final byCategory = sumByCategory(inPeriod);
           final byPayment = sumByPayment(inPeriod);
@@ -79,21 +92,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                SegmentedButton<_Period>(
-                  segments: const [
-                    ButtonSegment(value: _Period.mes, label: Text('Mês')),
-                    ButtonSegment(value: _Period.ultimos30, label: Text('30 dias')),
-                    ButtonSegment(value: _Period.ano, label: Text('Ano')),
-                    ButtonSegment(value: _Period.custom, label: Text('Custom')),
-                  ],
-                  selected: {_period},
-                  onSelectionChanged: (s) {
-                    if (s.first == _Period.custom) {
+                ToggleButtons(
+                  isSelected: [_period == _Period.mes, _period == _Period.ultimos30, _period == _Period.ano, _period == _Period.custom],
+                  onPressed: (i) {
+                    if (i == 3) {
+                      // Custom: sempre abre o date picker, mesmo se já estiver selecionado
                       _pickCustom();
                     } else {
-                      setState(() => _period = s.first);
+                      setState(() => _period = [_Period.mes, _Period.ultimos30, _Period.ano, _Period.custom][i]);
                     }
                   },
+                  borderRadius: const BorderRadius.all(Radius.circular(8)),
+                  selectedColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                  splashColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                  hoverColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                  children: const [
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Mês')),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('30 dias')),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Ano')),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Custom')),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Center(
@@ -113,7 +132,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 if (byDay.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text('Sem gastos no período.')),
+                    child: Center(child: Text('Sem gastos no periodo.')),
                   )
                 else
                   _DaySummaryCard(dayMap: byDay),
@@ -121,9 +140,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 if (byCategory.isEmpty && byPayment.isEmpty)
                   const Center(child: Text('Sem dados para visualização.'))
                 else ...[
-                  if (byCategory.isNotEmpty) _CategoryCard(data: byCategory),
+                  if (byCategory.isNotEmpty)
+                    _CategoryCard(data: byCategory),
                   const SizedBox(height: 16),
-                  if (byPayment.isNotEmpty) _PaymentCard(data: byPayment),
+                  if (byPayment.isNotEmpty)
+                    _PaymentCard(data: byPayment),
                 ],
               ],
             ),

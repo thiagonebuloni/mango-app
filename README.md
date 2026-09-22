@@ -10,7 +10,10 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
   (gratuito, ilimitado, offline).
 - **Parsing do cupom:** heurísticas locais (`lib/services/receipt_parser.dart`)
   extraem estabelecimento (CNPJ), data/hora, itens, **TOTAL** e forma de
-  pagamento de cupons SAT/NFC-e brasileiros.
+  pagamento de cupons SAT/NFC-e brasileiros. A data do gasto é escolhida
+  priorizando linhas de emissão/venda/cupom (ignorando validade/vencimento e
+  aceitando a hora na linha de baixo) e **"À VISTA"** é interpretado como
+  **Dinheiro**.
 - **Categorização:** regras por palavra-chave + **memória por estabelecimento**
   (o app aprende quando você corrige a categoria).
 - **Confirmação humana:** o app nunca grava direto da foto — o formulário abre
@@ -30,7 +33,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 13 testes (parser do cupom + categorizador + UI)
+flutter test      # 22 testes (parser do cupom + categorizador + UI)
 ```
 
 ## Rodando o app
@@ -53,6 +56,42 @@ flutter build apk --release
 # Instalar no aparelho:
 adb install build/app/outputs/flutter-apk/app-release.apk
 ```
+
+> **Importante (OCR no release):** o APK de release passa por minificação/R8.
+> O ML Kit descobre seus componentes por reflexão, e o R8 full mode (padrão a
+> partir do AGP 9, usado neste projeto) remove o construtor sem argumentos dos
+> registradores. Isso faz `TextRecognition.getClient()` quebrar no release com
+> `Attempt to invoke virtual method 'java.lang.Class java.lang.Object.getClass()'
+> on a null object reference`. As regras de keep necessárias estão em
+> **`android/app/proguard-rules.pro`** — não remova esse arquivo. Mais detalhes
+> e como validar em [Solução de problemas](#solução-de-problemas).
+
+## Solução de problemas
+
+### "Falha ao ler o cupom ... getClass() ... on a null object reference"
+
+Acontece **só no APK de release** (em debug o OCR funciona). É R8 removendo o
+construtor dos registradores do ML Kit, que são instanciados via reflexão.
+
+Correção (já aplicada em `android/app/proguard-rules.pro`):
+
+```proguard
+-keep class * implements com.google.firebase.components.ComponentRegistrar { *; }
+-keep class com.google.mlkit.** { *; }
+```
+
+Como conferir que o release saiu correto — nenhuma linha de saída e o DEX deve
+conter o construtor do registrador:
+
+```bash
+grep -E '^(TextRegistrar|CommonComponentRegistrar|VisionCommonRegistrar):' \
+  build/app/outputs/mapping/release/usage.txt
+# (nenhuma saída = construtores preservados)
+```
+
+Se você gerou APKs por ABI (`--split-per-abi`) antes da correção, apague-os:
+`flutter build apk --release` reescreve apenas `app-release.apk` e os splits
+antigos (quebrados) continuam no disco.
 
 Para iOS: `flutter build ios --release` (requer Mac + Xcode; ML Kit pede
 target iOS ≥ 15.5 e excluir arquitetura armv7 em Runner > Build Settings).

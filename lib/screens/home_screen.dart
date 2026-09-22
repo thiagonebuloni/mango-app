@@ -14,7 +14,10 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Meus gastos')),
-      floatingActionButton: const NewExpenseMenu(heroTag: 'fab'),
+      floatingActionButton: NewExpenseMenu(
+        heroTag: 'fab',
+        onAdded: () => ref.invalidate(expensesProvider),
+      ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar: $e')),
