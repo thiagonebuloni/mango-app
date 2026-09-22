@@ -1,16 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../models/models.dart';
 import '../screens/expense_form_screen.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
-  Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, Expense expense) async {
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  /// Mês em exibição (dia 1). Começa no mês atual; o usuário pode voltar
+  /// para meses anteriores e avançar até o mês atual.
+  late DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
+
+  DateTime get _monthStart => DateTime(_visibleMonth.year, _visibleMonth.month);
+  DateTime get _monthEnd =>
+      DateTime(_visibleMonth.year, _visibleMonth.month + 1);
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _visibleMonth.year == now.year && _visibleMonth.month == now.month;
+  }
+
+  void _previousMonth() {
+    setState(() {
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
+    });
+  }
+
+  void _nextMonth() {
+    if (_isCurrentMonth) return;
+    setState(() {
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _isCurrentMonth
+          ? now
+          : DateTime(_visibleMonth.year, _visibleMonth.month, 1),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month + 1, 0),
+      initialDatePickerMode: DatePickerMode.year,
+      helpText: 'Selecionar mês',
+      cancelText: 'Cancelar',
+      confirmText: 'OK',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _visibleMonth = DateTime(picked.year, picked.month);
+    });
+  }
+
+  Future<void> _confirmDelete(BuildContext context, Expense expense) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -42,8 +93,7 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
-  void _showDeleteOption(
-      BuildContext context, WidgetRef ref, Expense expense) {
+  void _showDeleteOption(BuildContext context, Expense expense) {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -56,7 +106,7 @@ class HomeScreen extends ConsumerWidget {
                   style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(sheetContext);
-                _confirmDelete(context, ref, expense);
+                _confirmDelete(context, expense);
               },
             ),
           ],
@@ -66,7 +116,7 @@ class HomeScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesProvider);
 
     return Scaffold(
@@ -81,9 +131,13 @@ class HomeScreen extends ConsumerWidget {
         data: (expenses) {
           final summary = summarize(expenses, DateTime.now());
           final monthExpenses = expenses.where((e) {
-            final m0 = DateTime(DateTime.now().year, DateTime.now().month);
-            return !e.dataHora.isBefore(m0);
+            return !e.dataHora.isBefore(_monthStart) &&
+                e.dataHora.isBefore(_monthEnd);
           }).toList();
+          final monthLabel =
+              DateFormat('MMMM yyyy', 'pt_BR').format(_monthStart);
+          final monthTitle =
+              '${monthLabel[0].toUpperCase()}${monthLabel.substring(1)}';
 
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(expensesProvider),
@@ -103,11 +157,53 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(
+                SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text('Gastos do mês',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          tooltip: 'Mês anterior',
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: _previousMonth,
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: _pickMonth,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 4),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    monthTitle,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    formatBRL(totalOf(monthExpenses)),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Próximo mês',
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: _isCurrentMonth ? null : _nextMonth,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 if (monthExpenses.isEmpty)
@@ -115,7 +211,7 @@ class HomeScreen extends ConsumerWidget {
                     hasScrollBody: false,
                     child: Center(
                       child: Text(
-                        'Nenhum gasto registrado.\nUse o botão + para começar.',
+                        'Nenhum gasto neste mês.\nUse o botão + para começar.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey),
                       ),
@@ -133,8 +229,7 @@ class HomeScreen extends ConsumerWidget {
                               builder: (_) => ExpenseFormScreen(expense: e),
                             ),
                           ),
-                          onLongPress: () =>
-                              _showDeleteOption(context, ref, e),
+                          onLongPress: () => _showDeleteOption(context, e),
                         );
                       },
                       childCount: monthExpenses.length,
