@@ -7,9 +7,15 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:financ/models/models.dart';
 import 'package:financ/screens/expense_form_screen.dart';
 import 'package:financ/screens/home_screen.dart';
+import 'package:financ/screens/reports_screen.dart';
 import 'package:financ/state/providers.dart';
 
 class _FakeExpensesNotifier extends ExpensesNotifier {
+  @override
+  Future<List<Expense>> build() async => const [];
+}
+
+class _FakeReportsNotifier extends ExpensesForReports {
   @override
   Future<List<Expense>> build() async => const [];
 }
@@ -74,6 +80,39 @@ void main() async {
 
       // O diálogo do showDatePicker deve aparecer.
       expect(find.byType(DatePickerDialog), findsOneWidget);
+    });
+  });
+
+  group('ReportsScreen (barra de períodos)', () {
+    testWidgets('botões Mês/30 dias/Ano/Custom ficam centralizados',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      for (final label in ['Mês', '30 dias', 'Ano', 'Custom']) {
+        expect(find.text(label), findsOneWidget);
+      }
+
+      final screenWidth = tester.getSize(find.byType(Scaffold)).width;
+      final bar = tester.getSize(find.byType(ToggleButtons));
+      expect(
+        bar.width,
+        lessThan(screenWidth - 24),
+        reason: 'a barra deve encolher ao conteúdo e não ocupar a tela toda',
+      );
+      expect(
+        tester.getCenter(find.byType(ToggleButtons)).dx,
+        moreOrLessEquals(screenWidth / 2, epsilon: 1),
+        reason: 'a barra de períodos deve ficar centralizada',
+      );
     });
   });
 }

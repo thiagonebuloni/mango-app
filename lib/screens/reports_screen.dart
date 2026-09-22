@@ -92,27 +92,65 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                ToggleButtons(
-                  isSelected: [_period == _Period.mes, _period == _Period.ultimos30, _period == _Period.ano, _period == _Period.custom],
-                  onPressed: (i) {
-                    if (i == 3) {
-                      // Custom: sempre abre o date picker, mesmo se já estiver selecionado
-                      _pickCustom();
-                    } else {
-                      setState(() => _period = [_Period.mes, _Period.ultimos30, _Period.ano, _Period.custom][i]);
-                    }
-                  },
-                  borderRadius: const BorderRadius.all(Radius.circular(8)),
-                  selectedColor: Colors.white,
-                  fillColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                  splashColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-                  hoverColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                  children: const [
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Mês')),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('30 dias')),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Ano')),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Custom')),
-                  ],
+                // Barra de períodos centralizada. O ToggleButtons monta um
+                // Row com mainAxisSize.min, mas dentro de um ListView a
+                // largura chega "tight" (min == max) e a linha ocuparia a tela
+                // toda, alinhando os botões à esquerda. O Center devolve
+                // restrição "loose" (shrink-wrap) e a rolagem horizontal evita
+                // overflow quando a fonte do sistema é grande.
+                Center(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ToggleButtons(
+                      isSelected: [
+                        _period == _Period.mes,
+                        _period == _Period.ultimos30,
+                        _period == _Period.ano,
+                        _period == _Period.custom,
+                      ],
+                      onPressed: (i) {
+                        if (i == _Period.custom.index) {
+                          // Custom: sempre abre o date picker, mesmo se já
+                          // estiver selecionado.
+                          _pickCustom();
+                        } else {
+                          setState(() => _period = _Period.values[i]);
+                        }
+                      },
+                      borderRadius: const BorderRadius.all(Radius.circular(8)),
+                      selectedColor: Colors.white,
+                      fillColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.2),
+                      splashColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.4),
+                      hoverColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.15),
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('Mês'),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('30 dias'),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('Ano'),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('Custom'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Center(
