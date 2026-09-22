@@ -27,6 +27,13 @@ Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os bot�
   no primeiro acesso (`lib/screens/profile_setup_screen.dart`); a tela inicial
   (`lib/screens/landing_screen.dart`) mostra avatar + nome e os botões
   **Meus gastos** e **Menu**, tudo centralizado.
+- **Cor de fundo em todo o app:** a cor escolhida no perfil é o tema do app
+  (`lib/theme/app_theme.dart`): fundo dos Scaffolds, AppBar, barra de navegação,
+  diálogos e bottom sheets. Trocar a cor no perfil repinta tudo na hora.
+- **Avatar:** atalhos com os emoticons mais usados **e** o teclado de emojis do
+  aparelho (qualquer emoji, inclusive os compostos como 👨‍👩‍👧).
+- **Sair da edição do perfil** com alterações não salvas pede confirmação;
+  sem alterações, sai direto.
 - **Fallback IA (opcional):** `lib/services/ai_fallback.dart` documenta o ponto
   de extensão para Gemini Flash (camada gratuita), enviando só o texto do OCR.
 
@@ -41,7 +48,7 @@ Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os bot�
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 32 testes (parser do cupom + categorizador + UI)
+flutter test      # 39 testes (parser do cupom + categorizador + UI)
 ```
 
 ## Rodando o app
@@ -116,6 +123,7 @@ lib/
 ├── models/models.dart         # Expense, Category, PaymentMethod, ReceiptDraft, UserProfile
 ├── db/db.dart                 # SQLite (sqflite) + perfil + agregações + períodos
 ├── state/providers.dart       # Riverpod: gastos, perfil, sumários dia/semana/mês
+├── theme/app_theme.dart       # tema do app a partir da cor de fundo do perfil
 ├── services/
 │   ├── ocr_service.dart       # ML Kit Text Recognition (on-device)
 │   ├── receipt_parser.dart    # parser heurístico de cupom fiscal BR

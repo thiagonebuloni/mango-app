@@ -8,27 +8,39 @@ import 'db/db.dart';
 import 'screens/landing_screen.dart';
 import 'screens/profile_setup_screen.dart';
 import 'state/providers.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Intl.defaultLocale = 'pt_BR';
   await initializeDateFormatting('pt_BR');
   await DBHelper.instance.init();
-  runApp(const ProviderScope(child: FinancApp()));
+  // O perfil é lido antes do primeiro frame para o app já abrir com a cor de
+  // fundo do usuário (ver [perfilInicialProvider]).
+  final perfil = await DBHelper.instance.loadProfile();
+  runApp(
+    ProviderScope(
+      overrides: [perfilInicialProvider.overrideWithValue(perfil)],
+      child: const FinancApp(),
+    ),
+  );
 }
 
-class FinancApp extends StatelessWidget {
+class FinancApp extends ConsumerWidget {
   const FinancApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Enquanto o profileProvider carrega, usa o perfil lido em `main()`: sem
+    // isso o app abriria com a cor padrão e depois "piscaria" para a do
+    // usuário.
+    final perfil =
+        ref.watch(profileProvider).value ?? ref.watch(perfilInicialProvider);
+
     return MaterialApp(
       title: 'Financ',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-      ),
+      theme: buildAppTheme(corFundoDoPerfil(perfil)),
       home: const ProfileGate(),
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],

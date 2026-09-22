@@ -45,9 +45,24 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   late final TextEditingController _nome;
   late String _avatar;
   late Color _cor;
+
+  /// Valores ao abrir a tela: base para saber se houve alteração (só na
+  /// edição vale pedir confirmação ao sair).
+  late String _nomeInicial;
+  late String _avatarInicial;
+  late Color _corInicial;
+
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
+
+  bool get _temAlteracoes =>
+      _nome.text.trim() != _nomeInicial ||
+      _avatar != _avatarInicial ||
+      _cor != _corInicial;
+
+  /// Na edição, sair com alterações não salvas pede confirmação.
+  bool get _bloqueiaSaida => _isEdit && _temAlteracoes;
 
   @override
   void initState() {
@@ -56,10 +71,20 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _nome = TextEditingController(text: perfil?.nome ?? '');
     _avatar = perfil?.avatar ?? kProfileAvatars.first;
     _cor = Color(perfil?.corFundo ?? UserProfile.corFundoPadrao);
+    _nomeInicial = _nome.text.trim();
+    _avatarInicial = _avatar;
+    _corInicial = _cor;
+    // Digitar muda o perfil: mantém o PopScope (canPop) em sincronia.
+    if (_isEdit) _nome.addListener(_onNomeChanged);
+  }
+
+  void _onNomeChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _nome.removeListener(_onNomeChanged);
     _nome.dispose();
     super.dispose();
   }
@@ -76,7 +101,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           ),
         );
     if (!mounted) return;
-    setState(() => _saving = false);
+    setState(() {
+      _saving = false;
+      // O que está na tela agora é o perfil salvo: nada mais pendente.
+      _nomeInicial = _nome.text.trim();
+      _avatarInicial = _avatar;
+      _corInicial = _cor;
+    });
 
     // No primeiro acesso esta tela é a raiz do app (nada a fechar). Na edição
     // ela foi empilhada pelo Menu: volta e avisa o usuário.
@@ -89,40 +120,89 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     }
   }
 
+  /// Sair da edição com alterações pendentes: só fecha se o usuário confirmar
+  /// que quer descartá-las.
+  Future<void> _confirmarSaida() async {
+    final navigator = Navigator.of(context);
+    final descartar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Descartar alterações?'),
+        content: const Text(
+          'Você mudou o perfil e ainda não salvou. Sair agora descarta '
+          'as alterações.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Continuar editando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Descartar e sair'),
+          ),
+        ],
+      ),
+    );
+    if ((descartar ?? false) && mounted) navigator.pop();
+  }
+
+  /// Abre o teclado do aparelho (com a tecla de emojis) para escolher qualquer
+  /// emoticon — inclusive os que não estão na lista de atalhos.
+  Future<void> _escolherEmojiDoTeclado() async {
+    final escolhido = await showDialog<String>(
+      context: context,
+      builder: (_) => _EmojiDialog(inicial: _avatar),
+    );
+    if (escolhido == null || escolhido.isEmpty || !mounted) return;
+    // Guarda só o primeiro emoticon (alguns têm vários code points, como
+    // 👨👩👧, 🇧🇷 ou 🧑🏽).
+    setState(() => _avatar = escolhido.characters.first);
+  }
+
   @override
   Widget build(BuildContext context) {
     final onCor = onBackgroundColor(_cor);
 
-    return Scaffold(
-      backgroundColor: _cor,
-      appBar: _isEdit
-          ? AppBar(
-              title: const Text('Editar perfil'),
-              backgroundColor: Colors.transparent,
-              foregroundColor: onCor,
-            )
-          : null,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _cabecalho(onCor),
-                    _previewAvatar(onCor),
-                    _campoNome(onCor),
-                    const SizedBox(height: 20),
-                    _escolhaAvatar(onCor),
-                    const SizedBox(height: 20),
-                    _escolhaCor(onCor),
-                    const SizedBox(height: 28),
-                    _botaoSalvar(),
-                  ],
+    return PopScope<Object?>(
+      // Na edição, sair com alterações não salvas pede confirmação; sem
+      // alterações (ou no primeiro acesso) a saída é direta.
+      canPop: !_bloqueiaSaida,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _confirmarSaida();
+      },
+      child: Scaffold(
+        backgroundColor: _cor,
+        appBar: _isEdit
+            ? AppBar(
+                title: const Text('Editar perfil'),
+                backgroundColor: Colors.transparent,
+                foregroundColor: onCor,
+              )
+            : null,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _cabecalho(onCor),
+                      _previewAvatar(onCor),
+                      _campoNome(onCor),
+                      const SizedBox(height: 20),
+                      _escolhaAvatar(onCor),
+                      const SizedBox(height: 20),
+                      _escolhaCor(onCor),
+                      const SizedBox(height: 28),
+                      _botaoSalvar(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -153,10 +233,18 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   Widget _previewAvatar(Color onCor) => Padding(
         padding: const EdgeInsets.only(top: 24),
-        child: CircleAvatar(
-          radius: 48,
-          backgroundColor: onCor.withValues(alpha: 0.08),
-          child: Text(_avatar, style: const TextStyle(fontSize: 48)),
+        child: Tooltip(
+          message: 'Toque para escolher outro emoji',
+          child: InkWell(
+            key: const ValueKey('avatar-preview'),
+            onTap: _escolherEmojiDoTeclado,
+            customBorder: const CircleBorder(),
+            child: CircleAvatar(
+              radius: 48,
+              backgroundColor: onCor.withValues(alpha: 0.08),
+              child: Text(_avatar, style: const TextStyle(fontSize: 48)),
+            ),
+          ),
         ),
       );
 
@@ -198,6 +286,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   onTap: () => setState(() => _avatar = avatar),
                 ),
             ],
+          ),
+          // Os atalhos acima são só os mais usados: aqui abre o teclado do
+          // aparelho (com a tecla de emojis) para escolher qualquer um.
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: TextButton.icon(
+              onPressed: _escolherEmojiDoTeclado,
+              icon: const Icon(Icons.keyboard_alt_outlined),
+              label: const Text('Outro emoji'),
+            ),
           ),
         ],
       );
@@ -318,6 +416,81 @@ class _ColorChoice extends StatelessWidget {
             ? Icon(Icons.check, size: 20, color: onBackgroundColor(color))
             : null,
       ),
+    );
+  }
+}
+
+/// Diálogo que abre o **teclado do aparelho** já com o campo em foco (no
+/// Android/iOS o teclado traz a tecla de emojis, dando acesso a todos eles) e
+/// devolve o emoticon digitado. Aceita sequências de vários code points e o
+/// chamador guarda apenas o primeiro emoticon.
+class _EmojiDialog extends StatefulWidget {
+  final String inicial;
+
+  const _EmojiDialog({required this.inicial});
+
+  @override
+  State<_EmojiDialog> createState() => _EmojiDialogState();
+}
+
+class _EmojiDialogState extends State<_EmojiDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.inicial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _usar() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Escolher emoji'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _controller,
+              // autofocus faz o teclado do aparelho abrir sozinho.
+              autofocus: true,
+              textAlign: TextAlign.center,
+              textInputAction: TextInputAction.done,
+              maxLength: 8,
+              style: const TextStyle(fontSize: 40),
+              decoration: const InputDecoration(
+                counterText: '',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) =>
+                  (v ?? '').trim().isEmpty ? 'Escolha um emoji' : null,
+              onFieldSubmitted: (_) => _usar(),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Dica: toque no ícone de emoji do teclado do aparelho para '
+              'ver todos.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(onPressed: _usar, child: const Text('Usar')),
+      ],
     );
   }
 }

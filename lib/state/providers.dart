@@ -45,12 +45,22 @@ final expensesProvider =
     AsyncNotifierProvider<ExpensesNotifier, List<Expense>>(
         ExpensesNotifier.new);
 
-/// Perfil do usuário (nome, avatar e cor de fundo da tela inicial).
+/// Perfil já lido do banco em `main()`, antes do primeiro frame.
+///
+/// Serve de valor inicial enquanto o [profileProvider] carrega: sem ele o app
+/// abriria com a cor de fundo padrão e só depois mudaria para a do usuário.
+final perfilInicialProvider = Provider<UserProfile?>((ref) => null);
+
+/// Perfil do usuário (nome, avatar e cor de fundo do app).
 ///
 /// `null` = primeiro acesso: o app abre a tela de cadastro do perfil.
 class ProfileNotifier extends AsyncNotifier<UserProfile?> {
   @override
-  Future<UserProfile?> build() => DBHelper.instance.loadProfile();
+  Future<UserProfile?> build() async {
+    final inicial = ref.read(perfilInicialProvider);
+    if (inicial != null) return inicial;
+    return DBHelper.instance.loadProfile();
+  }
 
   Future<void> save(UserProfile profile) async {
     await DBHelper.instance.saveProfile(profile);

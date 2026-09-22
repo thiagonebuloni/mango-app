@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +39,18 @@ class _FakeProfileNotifier extends ProfileNotifier {
     salvo = profile;
     state = AsyncData(profile);
   }
+}
+
+/// Perfil que nunca termina de carregar: simula o primeiro frame do app, antes
+/// do `profileProvider` resolver.
+class _LentoProfileNotifier extends ProfileNotifier {
+  final _completer = Completer<UserProfile?>();
+
+  @override
+  Future<UserProfile?> build() => _completer.future;
+
+  @override
+  Future<void> save(UserProfile profile) async {}
 }
 
 class _FakeExpensesNotifier extends ExpensesNotifier {
@@ -290,6 +304,86 @@ void main() async {
       expect(find.text('Informe seu nome'), findsOneWidget);
       expect(notifier.salvo, isNull);
     });
+
+    testWidgets('avatar pode vir do teclado de emojis do aparelho',
+        (tester) async {
+      final notifier = _FakeProfileNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [profileProvider.overrideWith(() => notifier)],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField), 'Ana');
+      await tester.ensureVisible(find.text('Outro emoji'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Outro emoji'));
+      await tester.pumpAndSettle();
+
+      // O diálogo abre com o campo em foco — é o autofocus que faz o teclado
+      // (com a tecla de emojis) aparecer no aparelho.
+      expect(find.text('Escolher emoji'), findsOneWidget);
+      final campoDialogo = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      expect(tester.widget<TextField>(campoDialogo).autofocus, isTrue);
+
+      // Emoji "digitado" no teclado do aparelho.
+      await tester.enterText(campoDialogo, '🦄');
+      await tester.tap(find.text('Usar'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Começar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Começar'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.salvo?.avatar, '🦄');
+      expect(find.text('🦄'), findsOneWidget); // avatar na tela inicial
+    });
+
+    testWidgets('preview do avatar também abre o seletor, com validação',
+        (tester) async {
+      final notifier = _FakeProfileNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [profileProvider.overrideWith(() => notifier)],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('avatar-preview')));
+      await tester.pumpAndSettle();
+
+      final campoDialogo = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+
+      // Sem emoji não fecha o diálogo (e a lista de atalhos continua válida).
+      await tester.enterText(campoDialogo, '   ');
+      await tester.tap(find.text('Usar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Escolha um emoji'), findsOneWidget);
+      expect(find.text('Escolher emoji'), findsOneWidget);
+
+      // Emoji com vários code points (família) é guardado inteiro.
+      await tester.enterText(campoDialogo, '👨‍👩‍👧');
+      await tester.tap(find.text('Usar'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField), 'Ana');
+      await tester.ensureVisible(find.text('Começar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Começar'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.salvo?.avatar, '👨‍👩‍👧');
+    });
   });
 
   group('Tela inicial (landing)', () {
@@ -387,6 +481,165 @@ void main() async {
       expect(notifier.salvo?.nome, 'Beatriz');
       expect(find.text('Olá, Beatriz!'), findsOneWidget);
       expect(find.text('Perfil atualizado'), findsOneWidget);
+    });
+
+    testWidgets('sair da edição com alterações pede confirmação',
+        (tester) async {
+      final notifier = _FakeProfileNotifier(_perfilTeste);
+      await abrirTelaInicial(tester, perfil: notifier);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar perfil'));
+      await tester.pumpAndSettle();
+
+      // Digita sem salvar e tenta sair pela seta de voltar.
+      await tester.enterText(find.byType(TextFormField), 'Beatriz');
+      await tester.pump();
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Descartar alterações?'), findsOneWidget);
+      expect(notifier.salvo, isNull);
+
+      // Continuar editando mantém a tela e o que foi digitado.
+      await tester.tap(find.text('Continuar editando'));
+      await tester.pumpAndSettle();
+      expect(find.text('Descartar alterações?'), findsNothing);
+      expect(find.text('Beatriz'), findsOneWidget);
+      expect(find.text('Olá, Ana!'), findsNothing);
+
+      // Confirmando o descarte, volta sem salvar.
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Descartar e sair'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Olá, Ana!'), findsOneWidget);
+      expect(notifier.salvo, isNull);
+    });
+
+    testWidgets('sair da edição sem alterações não pergunta nada',
+        (tester) async {
+      await abrirTelaInicial(tester);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar perfil'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Descartar alterações?'), findsNothing);
+      expect(find.text('Olá, Ana!'), findsOneWidget);
+    });
+  });
+
+  group('Cor de fundo em todo o app', () {
+    const cor = Color(0xFFE3F2FD); // cor do _perfilTeste
+
+    Future<void> abrirApp(WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider
+                .overrideWith(() => _FakeProfileNotifier(_perfilTeste)),
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: const FinancApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tema do app usa a cor do perfil, em todas as telas',
+        (tester) async {
+      await abrirApp(tester);
+
+      final themeInicial =
+          tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!;
+      expect(themeInicial.scaffoldBackgroundColor, cor);
+      expect(themeInicial.appBarTheme.backgroundColor, cor);
+      expect(themeInicial.navigationBarTheme.backgroundColor, cor);
+      expect(themeInicial.bottomSheetTheme.backgroundColor, cor);
+      expect(themeInicial.dialogTheme.backgroundColor, cor);
+
+      // Dentro do app (Gastos) a cor continua valendo — inclusive pintada de
+      // verdade pelo Scaffold/AppBar.
+      await tester.tap(find.text('Meus gastos'));
+      await tester.pumpAndSettle();
+
+      final theme =
+          Theme.of(tester.element(find.byType(HomeScreen)));
+      expect(theme.scaffoldBackgroundColor, cor);
+      expect(theme.appBarTheme.backgroundColor, cor);
+
+      final fundo = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(HomeScreen),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(fundo.color, cor);
+      expect(
+        tester
+            .widget<AppBar>(find.byType(AppBar))
+            .backgroundColor,
+        isNull, // usa o appBarTheme (cor do perfil)
+      );
+    });
+
+    testWidgets('o app abre já com a cor do usuário (perfil lido no main)',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            perfilInicialProvider.overrideWithValue(_perfilTeste),
+            profileProvider.overrideWith(() => _LentoProfileNotifier()),
+          ],
+          child: const FinancApp(),
+        ),
+      );
+      await tester.pump(); // 1º frame: profileProvider ainda carregando
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        tester
+            .widget<MaterialApp>(find.byType(MaterialApp))
+            .theme!
+            .scaffoldBackgroundColor,
+        cor,
+      );
+    });
+
+    testWidgets('trocar a cor no perfil repinta o app', (tester) async {
+      await abrirApp(tester);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar perfil'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const ValueKey('cor-2')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cor-2'))); // lilás
+      await tester.ensureVisible(find.text('Salvar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<MaterialApp>(find.byType(MaterialApp))
+            .theme!
+            .scaffoldBackgroundColor,
+        kProfileColors[2],
+      );
     });
   });
 }

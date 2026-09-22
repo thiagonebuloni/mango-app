@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
 import '../state/providers.dart';
+import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'profile_setup_screen.dart';
 import 'root_nav.dart';
@@ -18,7 +19,7 @@ class LandingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final perfil = ref.watch(profileProvider).value;
-    final cor = Color(perfil?.corFundo ?? UserProfile.corFundoPadrao);
+    final cor = corFundoDoPerfil(perfil);
     final onCor = onBackgroundColor(cor);
     final nome = perfil?.nome.trim() ?? '';
 
