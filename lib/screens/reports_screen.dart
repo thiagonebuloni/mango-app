@@ -181,7 +181,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     child: Center(child: Text('Sem gastos no periodo.')),
                   )
                 else
-                  _DaySummaryCard(dayMap: byDay),
+                  _DaySummaryCard(dayMap: byDay, expenses: inPeriod),
                 const SizedBox(height: 16),
                 if (byCategory.isEmpty && byPayment.isEmpty)
                   const Center(child: Text('Sem dados para visualização.'))
@@ -190,7 +190,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     _CategoryCard(data: byCategory),
                   const SizedBox(height: 16),
                   if (byPayment.isNotEmpty)
-                    _PaymentCard(data: byPayment),
+                    _PaymentCard(data: byPayment, expenses: inPeriod),
                 ],
               ],
             ),
@@ -203,8 +203,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
 class _DaySummaryCard extends StatelessWidget {
   final Map<DateTime, int> dayMap;
+  final List<Expense> expenses;
 
-  const _DaySummaryCard({required this.dayMap});
+  const _DaySummaryCard({required this.dayMap, required this.expenses});
+
+  List<Expense> _expensesOfDay(DateTime day) {
+    final list = expenses.where((e) {
+      return e.dataHora.year == day.year &&
+          e.dataHora.month == day.month &&
+          e.dataHora.day == day.day;
+    }).toList()
+      ..sort((a, b) => b.dataHora.compareTo(a.dataHora));
+    return list;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -220,26 +231,32 @@ class _DaySummaryCard extends StatelessWidget {
             child: Text('Gastos por dia',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
-          ...days.map((day) => ListTile(
-                leading: CircleAvatar(
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                  child: Text(
-                    DateFormat('dd', 'pt_BR').format(day),
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14),
-                  ),
+          ...days.map((day) {
+            final dayExpenses = _expensesOfDay(day);
+            return ExpansionTile(
+              leading: CircleAvatar(
+                backgroundColor:
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                child: Text(
+                  DateFormat('dd', 'pt_BR').format(day),
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
                 ),
-                title: Text(
-                  df.format(day),
-                  style: const TextStyle(fontSize: 13),
-                ),
-                trailing: Text(formatBRL(dayMap[day]!),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 15)),
-              )),
+              ),
+              title: Text(
+                df.format(day),
+                style: const TextStyle(fontSize: 13),
+              ),
+              trailing: Text(formatBRL(dayMap[day]!),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 15)),
+              children: [
+                for (final e in dayExpenses) ExpenseTile(expense: e),
+              ],
+            );
+          }),
         ],
       ),
     );
@@ -314,8 +331,15 @@ class _CategoryCard extends StatelessWidget {
 
 class _PaymentCard extends StatelessWidget {
   final Map<PaymentMethod, int> data;
+  final List<Expense> expenses;
 
-  const _PaymentCard({required this.data});
+  const _PaymentCard({required this.data, required this.expenses});
+
+  List<Expense> _expensesOf(PaymentMethod forma) {
+    final list = expenses.where((e) => e.forma == forma).toList()
+      ..sort((a, b) => b.dataHora.compareTo(a.dataHora));
+    return list;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -328,12 +352,22 @@ class _PaymentCard extends StatelessWidget {
     };
     return Card(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Por forma de pagamento',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
           for (final entry in data.entries)
-            ListTile(
+            ExpansionTile(
               leading: Icon(icons[entry.key]),
               title: Text(entry.key.label),
               trailing: Text(formatBRL(entry.value)),
+              children: [
+                for (final e in _expensesOf(entry.key))
+                  ExpenseTile(expense: e),
+              ],
             ),
         ],
       ),
