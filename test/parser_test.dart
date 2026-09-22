@@ -90,6 +90,68 @@ SALGADO         5,50
         'padaria pao quente ltda',
       );
     });
+
+    test('"À VISTA" é caracterizado como Dinheiro', () {
+      const text = '''
+PADARIA PAO QUENTE LTDA
+CNPJ 12.345.678/0001-90
+_______________________________________
+VALOR TOTAL R\$ 22,99
+FORMAS DE PAGAMENTO
+À VISTA R\$ 22,99
+20/03/2026 09:12:33
+''';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.pagamento, PaymentMethod.dinheiro);
+      expect(draft.totalCentavos, 2299);
+      expect(draft.estabelecimento, 'PADARIA PAO QUENTE LTDA');
+    });
+
+    test('"AVISTA" (OCR sem acento/espaço) também é Dinheiro', () {
+      const text = 'MERCADO CENTRAL\nTOTAL R\$ 30,00\nPAGAMENTO AVISTA';
+      expect(ReceiptParser.parse(text).pagamento, PaymentMethod.dinheiro);
+    });
+
+    test('"CREDITO A VISTA" continua sendo Crédito (não é dinheiro)', () {
+      const text = 'LOJA TESTE\nTOTAL R\$ 40,00\nCREDITO A VISTA R\$ 40,00';
+      expect(ReceiptParser.parse(text).pagamento, PaymentMethod.credito);
+    });
+
+    test('prioriza a data de emissão e ignora data de validade', () {
+      const text = '''
+SUPERMERCADO BOM PRECO
+CNPJ 11.222.333/0001-44
+PROMOCAO VALIDA ATE 05/04/2026
+DATA DE EMISSAO 20/03/2026 14:32:05
+TOTAL R\$ 100,00
+''';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.dataHora, DateTime(2026, 3, 20, 14, 32));
+    });
+
+    test('data e hora em linhas separadas (comum em cupons SAT)', () {
+      const text = '''
+PADARIA DO ZE
+CNPJ 12.345.678/0001-90
+20/09/2026
+08:15:03
+VALOR TOTAL R\$ 12,00
+''';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.dataHora, DateTime(2026, 9, 20, 8, 15));
+    });
+
+    test('aceita data com hífen e ano de 2 dígitos', () {
+      const text = 'LOJA TESTE\nCNPJ 00.111.222/0001-33\nDATA 20-03-26\n'
+          'TOTAL R\$ 5,00';
+      expect(ReceiptParser.parse(text).dataHora, DateTime(2026, 3, 20));
+    });
+
+    test('ignora data inválida lida errado pelo OCR', () {
+      const text = 'LANCHONETE X\nCNPJ 00.111.222/0001-33\nDATA 32/13/2026\n'
+          'TOTAL R\$ 8,00\n20/03/2026 10:00';
+      expect(ReceiptParser.parse(text).dataHora, DateTime(2026, 3, 20, 10));
+    });
   });
 
   group('Categorizer (regras locais)', () {
