@@ -19,6 +19,7 @@ dependencies:
   image_picker: ^1.2.3
   intl: ^0.20.2
   fl_chart: ^1.2.0
+  emoji_picker_flutter: ^4.5.4
 
 dev_dependencies:
   flutter_test:

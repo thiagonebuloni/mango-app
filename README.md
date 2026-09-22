@@ -30,8 +30,13 @@ Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os bot�
 - **Cor de fundo em todo o app:** a cor escolhida no perfil é o tema do app
   (`lib/theme/app_theme.dart`): fundo dos Scaffolds, AppBar, barra de navegação,
   diálogos e bottom sheets. Trocar a cor no perfil repinta tudo na hora.
-- **Avatar:** atalhos com os emoticons mais usados **e** o teclado de emojis do
-  aparelho (qualquer emoji, inclusive os compostos como 👨‍👩‍👧).
+- **Foto do cupom:** limite de 8 MB — imagens maiores (em geral vindas da
+  galeria) são recusadas **antes** de decodificar/rodar o OCR, pois decodificar
+  aloca muito mais memória e pode travar o app em aparelhos simples.
+- **Avatar:** atalhos com os emoticons mais usados **e** a grade de emojis do
+  app — que já abre direto com todos (busca, categorias e recentes), sem
+  depender do teclado do aparelho. O avatar guarda o primeiro emoticon
+  (funciona com compostos como 👨‍👩‍👧).
 - **Sair da edição do perfil** com alterações não salvas pede confirmação;
   sem alterações, sai direto.
 - **Fallback IA (opcional):** `lib/services/ai_fallback.dart` documenta o ponto
@@ -48,7 +53,7 @@ Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os bot�
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 39 testes (parser do cupom + categorizador + UI)
+flutter test      # 40 testes (parser do cupom + categorizador + UI)
 ```
 
 ## Rodando o app

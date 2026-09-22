@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +10,26 @@ import '../services/categorizer.dart';
 import '../services/ocr_service.dart';
 import '../services/receipt_parser.dart';
 import 'expense_form_screen.dart';
+
+/// Tamanho máximo aceito para a foto do cupom (em bytes). Imagens maiores — em
+/// especial vindas da galeria, que podem ter dezenas de MB em aparelhos novos —
+/// são recusadas antes do OCR, que alocaria muito mais memória ao decodificar
+/// (risco de travar/fechar o app em aparelhos simples).
+///
+/// A câmera usa `maxWidth` para redimensionar na origem, então este limite só
+/// costuma pegar arquivos da galeria — cupons comprimidos ficam bem abaixo.
+const int kMaxReceiptImageBytes = 8 * 1024 * 1024;
+
+/// Foto grande demais para processar com segurança (decodificar + OCR
+/// alocaria muito mais memória e poderia travar o app). Retorna a mensagem
+/// de erro amigável, ou `null` se o tamanho for aceitável.
+String? validarTamanhoImagem(int tamanhoBytes) {
+  if (tamanhoBytes <= kMaxReceiptImageBytes) return null;
+  return 'A imagem é grande demais '
+      '(${(tamanhoBytes / (1024 * 1024)).toStringAsFixed(1)} MB, '
+      'máximo ${(kMaxReceiptImageBytes / (1024 * 1024)).toStringAsFixed(0)} MB). '
+      'Tire uma foto do cupom ou escolha uma imagem menor.';
+}
 
 /// Captura a foto do cupom, roda o OCR on-device, interpreta os dados e
 /// abre o formulário já preenchido para confirmação do usuário.
@@ -40,6 +62,12 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         setState(() => _processing = false);
         return;
       }
+
+      // Recusa a imagem antes de decodificá-la: arquivos enormes (galeria)
+      // explodem a memória no decode/OCR e podem travar o app.
+      final tamanho = await File(picked.path).length();
+      final erroTamanho = validarTamanhoImagem(tamanho);
+      if (erroTamanho != null) throw Exception(erroTamanho);
 
       final text = await _ocr.extractText(picked.path);
       if (text.trim().isEmpty) {

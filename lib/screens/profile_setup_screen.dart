@@ -1,3 +1,4 @@
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -79,7 +80,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   void _onNomeChanged() {
-    if (mounted) setState(() {});
+    if (mounted) setState(() {}); // atualiza o PopScope (canPop) ao digitar
   }
 
   @override
@@ -147,16 +148,20 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if ((descartar ?? false) && mounted) navigator.pop();
   }
 
-  /// Abre o teclado do aparelho (com a tecla de emojis) para escolher qualquer
-  /// emoticon — inclusive os que não estão na lista de atalhos.
-  Future<void> _escolherEmojiDoTeclado() async {
-    final escolhido = await showDialog<String>(
+  /// Abre o seletor de emoticons (teclado de emojis do app, que já abre direto
+  /// na grade de emojis com busca, categorias e recentes — acesso a todos os
+  /// emojis, sem depender do teclado do aparelho).
+  Future<void> _escolherEmojiDaGrade() async {
+    final escolhido = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) => _EmojiDialog(inicial: _avatar),
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _EmojiSheet(),
     );
     if (escolhido == null || escolhido.isEmpty || !mounted) return;
     // Guarda só o primeiro emoticon (alguns têm vários code points, como
-    // 👨👩👧, 🇧🇷 ou 🧑🏽).
+    // 👨‍👩‍👧, 🇧🇷 ou 🧑🏽).
     setState(() => _avatar = escolhido.characters.first);
   }
 
@@ -237,7 +242,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           message: 'Toque para escolher outro emoji',
           child: InkWell(
             key: const ValueKey('avatar-preview'),
-            onTap: _escolherEmojiDoTeclado,
+            onTap: _escolherEmojiDaGrade,
             customBorder: const CircleBorder(),
             child: CircleAvatar(
               radius: 48,
@@ -287,13 +292,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 ),
             ],
           ),
-          // Os atalhos acima são só os mais usados: aqui abre o teclado do
-          // aparelho (com a tecla de emojis) para escolher qualquer um.
+          // Os atalhos acima são só os mais usados: aqui abre a grade de emojis
+          // do app (categorias + busca + recentes) para escolher qualquer um.
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: TextButton.icon(
-              onPressed: _escolherEmojiDoTeclado,
-              icon: const Icon(Icons.keyboard_alt_outlined),
+              onPressed: _escolherEmojiDaGrade,
+              icon: const Icon(Icons.emoji_emotions_outlined),
               label: const Text('Outro emoji'),
             ),
           ),
@@ -420,77 +425,60 @@ class _ColorChoice extends StatelessWidget {
   }
 }
 
-/// Diálogo que abre o **teclado do aparelho** já com o campo em foco (no
-/// Android/iOS o teclado traz a tecla de emojis, dando acesso a todos eles) e
-/// devolve o emoticon digitado. Aceita sequências de vários code points e o
+/// Planilha de emojis do app: já abre direto na grade com todos os emojis
+/// (categorias, busca e recentes). Tocar num emoji fecha devolvendo-o; o
 /// chamador guarda apenas o primeiro emoticon.
-class _EmojiDialog extends StatefulWidget {
-  final String inicial;
-
-  const _EmojiDialog({required this.inicial});
-
-  @override
-  State<_EmojiDialog> createState() => _EmojiDialogState();
-}
-
-class _EmojiDialogState extends State<_EmojiDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.inicial);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _usar() {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    Navigator.of(context).pop(_controller.text.trim());
-  }
+class _EmojiSheet extends StatelessWidget {
+  const _EmojiSheet();
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Escolher emoji'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _controller,
-              // autofocus faz o teclado do aparelho abrir sozinho.
-              autofocus: true,
-              textAlign: TextAlign.center,
-              textInputAction: TextInputAction.done,
-              maxLength: 8,
-              style: const TextStyle(fontSize: 40),
-              decoration: const InputDecoration(
-                counterText: '',
-                border: OutlineInputBorder(),
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: FractionallySizedBox(
+          heightFactor: 0.7,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+                child: Text(
+                  'Escolha um emoji',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
               ),
-              validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Escolha um emoji' : null,
-              onFieldSubmitted: (_) => _usar(),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Dica: toque no ícone de emoji do teclado do aparelho para '
-              'ver todos.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12),
-            ),
-          ],
+              Expanded(
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) =>
+                      Navigator.of(context).pop(emoji.emoji),
+                  config: const Config(
+                    checkPlatformCompatibility: true,
+                    // App em pt-BR: busca em português ("unicórnio" em vez de
+                    // "unicorn").
+                    locale: Locale('pt'),
+                    emojiViewConfig: EmojiViewConfig(
+                      columns: 8,
+                      emojiSizeMax: 28,
+                      noRecents: Text(
+                        'Sem emojis recentes',
+                        style: TextStyle(fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    searchViewConfig: SearchViewConfig(
+                      hintText: 'Buscar emoji',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(onPressed: _usar, child: const Text('Usar')),
-      ],
     );
   }
 }

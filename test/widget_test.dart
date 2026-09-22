@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart'
+    hide Category;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:financ/main.dart';
 import 'package:financ/models/models.dart';
+import 'package:financ/screens/capture_screen.dart';
 import 'package:financ/screens/expense_form_screen.dart';
 import 'package:financ/screens/home_screen.dart';
 import 'package:financ/screens/landing_screen.dart';
@@ -305,7 +308,7 @@ void main() async {
       expect(notifier.salvo, isNull);
     });
 
-    testWidgets('avatar pode vir do teclado de emojis do aparelho',
+    testWidgets('avatar pode vir da grade com todos os emojis',
         (tester) async {
       final notifier = _FakeProfileNotifier();
       await tester.pumpWidget(
@@ -322,19 +325,17 @@ void main() async {
       await tester.tap(find.text('Outro emoji'));
       await tester.pumpAndSettle();
 
-      // O diálogo abre com o campo em foco — é o autofocus que faz o teclado
-      // (com a tecla de emojis) aparecer no aparelho.
-      expect(find.text('Escolher emoji'), findsOneWidget);
-      final campoDialogo = find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      );
-      expect(tester.widget<TextField>(campoDialogo).autofocus, isTrue);
+      // Abre direto a grade de emojis (interna ao app, com todos — busca,
+      // categorias e recentes), sem depender do teclado do aparelho.
+      expect(find.text('Escolha um emoji'), findsOneWidget);
+      expect(find.byType(EmojiPicker), findsOneWidget);
 
-      // Emoji "digitado" no teclado do aparelho.
-      await tester.enterText(campoDialogo, '🦄');
-      await tester.tap(find.text('Usar'));
+      // Tocar num emoji fecha a grade e atualiza o preview.
+      final grade = tester.widget<EmojiPicker>(find.byType(EmojiPicker));
+      grade.onEmojiSelected!.call(null, const Emoji('🦄', 'unicorn'));
       await tester.pumpAndSettle();
+
+      expect(find.text('Escolha um emoji'), findsNothing);
 
       await tester.ensureVisible(find.text('Começar'));
       await tester.pumpAndSettle();
@@ -345,7 +346,7 @@ void main() async {
       expect(find.text('🦄'), findsOneWidget); // avatar na tela inicial
     });
 
-    testWidgets('preview do avatar também abre o seletor, com validação',
+    testWidgets('preview do avatar também abre a grade de emojis',
         (tester) async {
       final notifier = _FakeProfileNotifier();
       await tester.pumpWidget(
@@ -358,22 +359,12 @@ void main() async {
 
       await tester.tap(find.byKey(const ValueKey('avatar-preview')));
       await tester.pumpAndSettle();
-
-      final campoDialogo = find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      );
-
-      // Sem emoji não fecha o diálogo (e a lista de atalhos continua válida).
-      await tester.enterText(campoDialogo, '   ');
-      await tester.tap(find.text('Usar'));
-      await tester.pumpAndSettle();
       expect(find.text('Escolha um emoji'), findsOneWidget);
-      expect(find.text('Escolher emoji'), findsOneWidget);
 
-      // Emoji com vários code points (família) é guardado inteiro.
-      await tester.enterText(campoDialogo, '👨‍👩‍👧');
-      await tester.tap(find.text('Usar'));
+      // Família (emoji com vários code points) é guardada inteira.
+      final grade = tester.widget<EmojiPicker>(find.byType(EmojiPicker));
+      grade.onEmojiSelected!
+          .call(null, const Emoji('👨‍👩‍👧', 'family man woman girl'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField), 'Ana');
@@ -383,6 +374,18 @@ void main() async {
       await tester.pumpAndSettle();
 
       expect(notifier.salvo?.avatar, '👨‍👩‍👧');
+    });
+  });
+
+  group('Limite da imagem do cupom', () {
+    test('até 8 MB passa; acima disso, mensagem com o tamanho', () {
+      expect(validarTamanhoImagem(kMaxReceiptImageBytes), isNull);
+      expect(validarTamanhoImagem(3 * 1024 * 1024), isNull);
+
+      final erro = validarTamanhoImagem(12 * 1024 * 1024);
+      expect(erro, isNotNull);
+      expect(erro, contains('12.0 MB'));
+      expect(erro, contains('máximo 8 MB'));
     });
   });
 
