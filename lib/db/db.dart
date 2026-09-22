@@ -34,15 +34,32 @@ class DBHelper {
     )
   ''';
 
+  /// Perfil do usuário (nome, avatar e cor de fundo): uma única linha.
+  static const _profileTable = '''
+    CREATE TABLE profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      nome TEXT NOT NULL,
+      avatar TEXT NOT NULL,
+      cor INTEGER NOT NULL
+    )
+  ''';
+
+  /// v1 = gastos + memória de categorias; v2 = perfil do usuário.
+  static const _dbVersion = 2;
+
   Future<void> init() async {
     if (_db != null) return;
     final path = join(await getDatabasesPath(), 'financ.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: _dbVersion,
       onCreate: (db, _) async {
         await db.execute(_expensesTable);
         await db.execute(_merchantsTable);
+        await db.execute(_profileTable);
+      },
+      onUpgrade: (db, oldVersion, _) async {
+        if (oldVersion < 2) await db.execute(_profileTable);
       },
     );
   }
@@ -145,6 +162,25 @@ class DBHelper {
       [start.millisecondsSinceEpoch, end.millisecondsSinceEpoch],
     );
     return (rows.first['total'] as int?) ?? 0;
+  }
+
+  // ---------------- perfil do usuário ----------------
+
+  /// Perfil salvo, ou `null` quando o usuário ainda não fez o cadastro
+  /// (primeiro acesso → tela de boas-vindas).
+  Future<UserProfile?> loadProfile() async {
+    final rows = await db.query('profile', where: 'id = ?', whereArgs: [1]);
+    if (rows.isEmpty) return null;
+    return UserProfile.fromMap(rows.first);
+  }
+
+  /// Grava (ou atualiza) o perfil do usuário.
+  Future<void> saveProfile(UserProfile profile) async {
+    await db.insert(
+      'profile',
+      profile.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 }
 

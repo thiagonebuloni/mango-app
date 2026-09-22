@@ -4,12 +4,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:financ/main.dart';
 import 'package:financ/models/models.dart';
 import 'package:financ/screens/expense_form_screen.dart';
 import 'package:financ/screens/home_screen.dart';
+import 'package:financ/screens/landing_screen.dart';
+import 'package:financ/screens/profile_setup_screen.dart';
 import 'package:financ/screens/reports_screen.dart';
 import 'package:financ/state/providers.dart';
 import 'package:financ/widgets/common.dart';
+
+/// Perfil já cadastrado (casos de "demais aberturas" do app).
+const _perfilTeste = UserProfile(
+  nome: 'Ana',
+  avatar: '🦊',
+  corFundo: 0xFFE3F2FD,
+);
+
+class _FakeProfileNotifier extends ProfileNotifier {
+  _FakeProfileNotifier([this._perfil]);
+
+  final UserProfile? _perfil;
+
+  /// Último perfil salvo pelo usuário (para as asserções dos testes).
+  UserProfile? salvo;
+
+  @override
+  Future<UserProfile?> build() async => _perfil;
+
+  @override
+  Future<void> save(UserProfile profile) async {
+    salvo = profile;
+    state = AsyncData(profile);
+  }
+}
 
 class _FakeExpensesNotifier extends ExpensesNotifier {
   _FakeExpensesNotifier([this._expenses = const []]);
@@ -187,6 +215,178 @@ void main() async {
         lessThan(fabTop),
         reason: 'a página deve rolar até os dados ficarem acima do FAB',
       );
+    });
+  });
+
+  group('Primeiro acesso (cadastro do perfil)', () {
+    testWidgets('sem perfil o app abre a tela de cadastro', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider.overrideWith(() => _FakeProfileNotifier()),
+          ],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bem-vindo!'), findsOneWidget);
+      expect(find.text('Nome do usuário'), findsOneWidget);
+      expect(find.text('Escolha seu avatar'), findsOneWidget);
+      expect(find.text('Cor de fundo'), findsOneWidget);
+      expect(find.text('Começar'), findsOneWidget);
+      // A tela inicial (landing) só aparece depois do cadastro.
+      expect(find.text('Meus gastos'), findsNothing);
+    });
+
+    testWidgets('salvar nome, avatar e cor abre a tela inicial',
+        (tester) async {
+      final notifier = _FakeProfileNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [profileProvider.overrideWith(() => notifier)],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField), 'Ana');
+      await tester.ensureVisible(find.text(kProfileAvatars[8]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(kProfileAvatars[8])); // 🦊
+      await tester.ensureVisible(find.byKey(const ValueKey('cor-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cor-1'))); // azul
+      await tester.ensureVisible(find.text('Começar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Começar'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.salvo?.nome, 'Ana');
+      expect(notifier.salvo?.avatar, kProfileAvatars[8]);
+      expect(notifier.salvo?.corFundo, kProfileColors[1].toARGB32());
+
+      // A tela inicial substituiu o cadastro com o que foi escolhido.
+      expect(find.text('Olá, Ana!'), findsOneWidget);
+      expect(find.text('Meus gastos'), findsOneWidget);
+      expect(find.text('Menu'), findsOneWidget);
+    });
+
+    testWidgets('nome vazio não salva e mostra o erro', (tester) async {
+      final notifier = _FakeProfileNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [profileProvider.overrideWith(() => notifier)],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Começar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Começar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Informe seu nome'), findsOneWidget);
+      expect(notifier.salvo, isNull);
+    });
+  });
+
+  group('Tela inicial (landing)', () {
+    Future<void> abrirTelaInicial(
+      WidgetTester tester, {
+      _FakeProfileNotifier? perfil,
+    }) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider.overrideWith(
+                () => perfil ?? _FakeProfileNotifier(_perfilTeste)),
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('mostra avatar, nome e os botões, tudo centralizado',
+        (tester) async {
+      await abrirTelaInicial(tester);
+
+      expect(find.text('🦊'), findsOneWidget);
+      expect(find.text('Olá, Ana!'), findsOneWidget);
+      expect(find.text('Meus gastos'), findsOneWidget);
+      expect(find.text('Menu'), findsOneWidget);
+
+      final centro = tester.getSize(find.byType(Scaffold)).width / 2;
+      expect(tester.getCenter(find.byType(CircleAvatar)).dx,
+          moreOrLessEquals(centro, epsilon: 1));
+      expect(tester.getCenter(find.text('Olá, Ana!')).dx,
+          moreOrLessEquals(centro, epsilon: 1));
+
+      for (final label in ['Meus gastos', 'Menu']) {
+        final botao = find.ancestor(
+          of: find.text(label),
+          matching: find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width == kLandingActionWidth,
+          ),
+        );
+        expect(botao, findsOneWidget, reason: 'botão "$label"');
+        expect(
+          tester.getCenter(botao).dx,
+          moreOrLessEquals(centro, epsilon: 1),
+          reason: 'botão "$label" deve ficar centralizado',
+        );
+      }
+    });
+
+    testWidgets('"Meus gastos" abre a navegação Gastos/Relatórios',
+        (tester) async {
+      await abrirTelaInicial(tester);
+
+      await tester.tap(find.text('Meus gastos'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gastos'), findsOneWidget);
+      expect(find.text('Relatórios'), findsOneWidget);
+      expect(find.textContaining('Nenhum gasto'), findsOneWidget);
+    });
+
+    testWidgets('"Menu" abre as opções do app', (tester) async {
+      await abrirTelaInicial(tester);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Relatórios'), findsOneWidget);
+      expect(find.text('Editar perfil'), findsOneWidget);
+      expect(find.text('Sobre o Financ'), findsOneWidget);
+    });
+
+    testWidgets('"Editar perfil" salva as alterações', (tester) async {
+      final notifier = _FakeProfileNotifier(_perfilTeste);
+      await abrirTelaInicial(tester, perfil: notifier);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar perfil'));
+      await tester.pumpAndSettle();
+
+      // Campos vêm preenchidos com o perfil atual.
+      expect(find.text('Ana'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextFormField), 'Beatriz');
+      await tester.ensureVisible(find.text('Salvar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.salvo?.nome, 'Beatriz');
+      expect(find.text('Olá, Beatriz!'), findsOneWidget);
+      expect(find.text('Perfil atualizado'), findsOneWidget);
     });
   });
 }

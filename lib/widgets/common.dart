@@ -22,6 +22,13 @@ int? parseMoneyInput(String input) {
   return (value * 100).round();
 }
 
+/// Cor de texto/ícone legível sobre [background] (usada nas telas em que o
+/// usuário escolhe a cor de fundo).
+Color onBackgroundColor(Color background) =>
+    ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+        ? Colors.white
+        : Colors.black87;
+
 extension CategoryVisual on Category {
   IconData get icon {
     switch (this) {

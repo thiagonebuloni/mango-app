@@ -45,6 +45,22 @@ final expensesProvider =
     AsyncNotifierProvider<ExpensesNotifier, List<Expense>>(
         ExpensesNotifier.new);
 
+/// Perfil do usuário (nome, avatar e cor de fundo da tela inicial).
+///
+/// `null` = primeiro acesso: o app abre a tela de cadastro do perfil.
+class ProfileNotifier extends AsyncNotifier<UserProfile?> {
+  @override
+  Future<UserProfile?> build() => DBHelper.instance.loadProfile();
+
+  Future<void> save(UserProfile profile) async {
+    await DBHelper.instance.saveProfile(profile);
+    state = AsyncData(profile);
+  }
+}
+
+final profileProvider =
+    AsyncNotifierProvider<ProfileNotifier, UserProfile?>(ProfileNotifier.new);
+
 /// Sumários diário/semanal/mensal derivados da lista carregada.
 class PeriodSummary {
   final int dia;

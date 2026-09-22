@@ -5,8 +5,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'db/db.dart';
-import 'screens/home_screen.dart';
-import 'screens/reports_screen.dart';
+import 'screens/landing_screen.dart';
+import 'screens/profile_setup_screen.dart';
+import 'state/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +29,7 @@ class FinancApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
       ),
-      home: const RootNav(),
+      home: const ProfileGate(),
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],
       localizationsDelegates: const [
@@ -40,67 +41,34 @@ class FinancApp extends StatelessWidget {
   }
 }
 
-class RootNav extends StatefulWidget {
-  const RootNav({super.key});
+/// Decide a primeira tela do app:
+///
+/// - **primeiro acesso** (nenhum perfil salvo) → cadastro do nome, avatar e
+///   cor de fundo;
+/// - **demais aberturas** → tela inicial com avatar, nome e os botões
+///   "Meus gastos" e "Menu".
+class ProfileGate extends ConsumerWidget {
+  const ProfileGate({super.key});
 
   @override
-  State<RootNav> createState() => _RootNavState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref.watch(profileProvider).when(
+          loading: () => const _CarregandoScreen(),
+          error: (e, _) => Scaffold(
+            body: Center(child: Text('Erro ao carregar o perfil: $e')),
+          ),
+          data: (perfil) => perfil == null
+              ? const ProfileSetupScreen()
+              : const LandingScreen(),
+        );
+  }
 }
 
-class _RootNavState extends State<RootNav> {
-  final _pageController = PageController();
-  int _index = 0;
+class _CarregandoScreen extends StatelessWidget {
+  const _CarregandoScreen();
 
-  void _onPageChanged(int index) {
-    if (index != _index) {
-      setState(() => _index = index);
-    }
-  }
-
-  void _onDestinationSelected(int index) {
-    if (index != _index) {
-      _pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
-    }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        physics: const BouncingScrollPhysics(),
-        onPageChanged: _onPageChanged,
-        children: const [
-          HomeScreen(),
-          ReportsScreen(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: _onDestinationSelected,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Gastos',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.pie_chart_outline),
-            selectedIcon: Icon(Icons.pie_chart),
-            label: 'Relatórios',
-          ),
-        ],
-      ),
-    );
-  }
 }

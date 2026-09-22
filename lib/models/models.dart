@@ -191,3 +191,45 @@ class ReceiptDraft {
       'ReceiptDraft(estabelecimento: $estabelecimento, data: $dataHora, '
       'total: $totalCentavos, pagamento: ${pagamento?.name}, itens: ${itens.length})';
 }
+
+/// Perfil do usuário, exibido na tela inicial e salvo em uma única linha da
+/// tabela `profile` (app local: sem login, sem servidor).
+class UserProfile {
+  final String nome;
+  final String avatar; // emoticon escolhido (ex.: '🦊')
+  final int corFundo; // cor de fundo da tela inicial, em ARGB
+
+  const UserProfile({
+    required this.nome,
+    required this.avatar,
+    required this.corFundo,
+  });
+
+  /// Valores usados quando o usuário ainda não escolheu nada.
+  static const String avatarPadrao = '🙂';
+  static const int corFundoPadrao = 0xFFE0F2F1;
+
+  UserProfile copyWith({String? nome, String? avatar, int? corFundo}) =>
+      UserProfile(
+        nome: nome ?? this.nome,
+        avatar: avatar ?? this.avatar,
+        corFundo: corFundo ?? this.corFundo,
+      );
+
+  Map<String, Object?> toMap() => {
+        'id': 1, // linha única
+        'nome': nome,
+        'avatar': avatar,
+        'cor': corFundo,
+      };
+
+  static UserProfile fromMap(Map<String, Object?> map) => UserProfile(
+        nome: (map['nome'] as String?) ?? '',
+        avatar: (map['avatar'] as String?) ?? avatarPadrao,
+        corFundo: (map['cor'] as int?) ?? corFundoPadrao,
+      );
+
+  @override
+  String toString() =>
+      'UserProfile(nome: $nome, avatar: $avatar, cor: $corFundo)';
+}
