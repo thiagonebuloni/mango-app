@@ -72,14 +72,16 @@ extension CategoryVisual on Category {
 class ExpenseTile extends StatelessWidget {
   final Expense expense;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
-  const ExpenseTile({super.key, required this.expense, this.onTap});
+  const ExpenseTile({super.key, required this.expense, this.onTap, this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
     final e = expense;
     return ListTile(
       onTap: onTap,
+      onLongPress: onLongPress,
       leading: CircleAvatar(
         backgroundColor: e.categoria.color.withValues(alpha: 0.15),
         foregroundColor: e.categoria.color,

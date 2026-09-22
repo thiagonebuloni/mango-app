@@ -1,12 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/models.dart';
 import '../screens/expense_form_screen.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, Expense expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Excluir gasto?'),
+        content: Text(
+          'Deseja excluir este gasto de ${formatBRL(expense.valorCentavos)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Não'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final id = expense.id;
+    if (id == null) return;
+    await ref.read(expensesProvider.notifier).delete(id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gasto excluído')),
+      );
+    }
+  }
+
+  void _showDeleteOption(
+      BuildContext context, WidgetRef ref, Expense expense) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Excluir',
+                  style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _confirmDelete(context, ref, expense);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -76,6 +133,8 @@ class HomeScreen extends ConsumerWidget {
                               builder: (_) => ExpenseFormScreen(expense: e),
                             ),
                           ),
+                          onLongPress: () =>
+                              _showDeleteOption(context, ref, e),
                         );
                       },
                       childCount: monthExpenses.length,
