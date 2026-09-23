@@ -40,11 +40,11 @@ class LandingScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
-                  radius: 56,
+                  radius: 168, // 3x o tamanho original (56)
                   backgroundColor: onCor.withValues(alpha: 0.08),
                   child: Text(
                     perfil?.avatar ?? UserProfile.avatarPadrao,
-                    style: const TextStyle(fontSize: 56),
+                    style: const TextStyle(fontSize: 168),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -140,7 +140,7 @@ class LandingScreen extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.download_outlined),
                 title: const Text('Importar em CSV'),
-                subtitle: const Text('Restaurar backup (substitui os dados)'),
+                subtitle: const Text('Soma o CSV sem apagar registros'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _importarCsv(context, ref);
@@ -186,7 +186,7 @@ class LandingScreen extends ConsumerWidget {
     }
   }
 
-  /// Escolhe um CSV, mostra o resumo e substitui os lançamentos atuais.
+  /// Escolhe um CSV e agrega os lançamentos ao app, sem apagar nada.
   Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     List<PlatformFile> files;
@@ -227,8 +227,9 @@ class LandingScreen extends ConsumerWidget {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Importar backup?'),
         content: Text(
-          'Isto substitui os lançamentos atuais pelos '
-          '${result.expenses.length} do arquivo CSV.',
+          'Os ${result.expenses.length} lançamento(s) do CSV serão somados '
+          'aos já existentes. Duplicatas são ignoradas e nenhum registro '
+          'do aparelho é apagado.',
         ),
         actions: [
           TextButton(
@@ -243,14 +244,17 @@ class LandingScreen extends ConsumerWidget {
       ),
     );
     if (confirmado != true) return;
-    await ref.read(expensesProvider.notifier).restoreAll(result.expenses);
+    final adicionados =
+        await ref.read(expensesProvider.notifier).mergeAll(result.expenses);
+    final duplicados = result.expenses.length - adicionados;
     final ignoradas = result.skipped > 0
-        ? ' (${result.skipped} linha(s) ignorada(s))'
+        ? ' ${result.skipped} linha(s) inválida(s) ignorada(s).'
         : '';
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'Backup importado: ${result.expenses.length} lançamento(s)$ignoradas',
+          'Importação concluída: $adicionados lançamento(s) novo(s), '
+          '$duplicados duplicado(s) ignorado(s).$ignoradas',
         ),
       ),
     );

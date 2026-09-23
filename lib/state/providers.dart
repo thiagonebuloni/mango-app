@@ -40,13 +40,24 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
     await _reload();
   }
 
-  /// Substitui todos os lançamentos pelos do backup CSV importado.
-  Future<void> restoreAll(List<Expense> expenses) async {
-    await DBHelper.instance.clearExpenses();
-    if (expenses.isNotEmpty) {
-      await DBHelper.instance.insertExpensesBatch(expenses);
+  /// Agrega um backup CSV importado aos lançamentos já existentes.
+  ///
+  /// Por segurança **não apaga nada**: só insere o que ainda não está no
+  /// app — duplicatas vindas do arquivo ou já cadastradas (mesma
+  /// [Expense.chaveUnica]) são ignoradas, e registros únicos do aparelho
+  /// são preservados. Retorna quantos lançamentos novos foram inseridos.
+  Future<int> mergeAll(List<Expense> imported) async {
+    final existentes = await DBHelper.instance.allExpenses();
+    final chaves = existentes.map((e) => e.chaveUnica).toSet();
+    final novos = <Expense>[];
+    for (final e in imported) {
+      if (chaves.add(e.chaveUnica)) novos.add(e);
+    }
+    if (novos.isNotEmpty) {
+      await DBHelper.instance.insertExpensesBatch(novos);
     }
     await _reload();
+    return novos.length;
   }
 }
 

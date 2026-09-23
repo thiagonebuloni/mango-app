@@ -115,6 +115,21 @@ class Expense {
   /// Atalho de leitura: receitas somam, despesas subtraem.
   bool get isReceita => tipo == EntryKind.receita;
 
+  /// Chave de duplicidade usada na importação de backup CSV: dois
+  /// lançamentos com a mesma chave são o mesmo registro (independente do
+  /// id gerado pelo banco). Todos os campos persistidos no CSV participam,
+  /// e a data entra em milissegundos para sobreviver ao export/import.
+  String get chaveUnica => [
+        tipo.name,
+        valorCentavos,
+        dataHora.millisecondsSinceEpoch,
+        categoria.name,
+        forma.name,
+        descricao,
+        estabelecimento,
+        origem.name,
+      ].join('|');
+
   Expense copyWith({
     int? id,
     int? valorCentavos,
@@ -229,7 +244,7 @@ class UserProfile {
   });
 
   /// Valores usados quando o usuário ainda não escolheu nada.
-  static const String avatarPadrao = '🙂';
+  static const String avatarPadrao = '🐸';
   static const int corFundoPadrao = 0xFFE0F2F1;
 
   UserProfile copyWith({String? nome, String? avatar, int? corFundo}) =>

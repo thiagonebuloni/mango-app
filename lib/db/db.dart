@@ -191,11 +191,6 @@ class DBHelper {
     );
   }
 
-  /// Apaga todos os lançamentos (usado antes de restaurar um backup CSV).
-  Future<void> clearExpenses() async {
-    await db.delete('expenses');
-  }
-
   /// Insere vários lançamentos em lote (importação de backup CSV).
   Future<void> insertExpensesBatch(List<Expense> expenses) async {
     final batch = db.batch();

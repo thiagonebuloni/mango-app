@@ -153,6 +153,32 @@ void main() async {
       expect(result.expenses, isEmpty);
       expect(result.skipped, 1);
     });
+
+    test('chave de duplicidade sobrevive ao export/import (agregação)', () {
+      final original = Expense(
+        valorCentavos: 12345,
+        dataHora: DateTime(2026, 8, 20, 9, 30, 15, 250),
+        categoria: Category.mercado,
+        forma: PaymentMethod.pix,
+        descricao: 'café; pão',
+        estabelecimento: 'MERCADO "BOM" LTDA',
+      );
+      final reimportado =
+          CsvBackup.import(CsvBackup.export([original])).expenses.single;
+
+      // Mesmo registro → mesma chave: a importação agrega sem duplicar.
+      expect(reimportado.chaveUnica, original.chaveUnica);
+
+      // Dados diferentes → chave diferente (seria um registro novo).
+      expect(
+        original.copyWith(valorCentavos: 999).chaveUnica,
+        isNot(original.chaveUnica),
+      );
+      expect(
+        original.copyWith(tipo: EntryKind.receita).chaveUnica,
+        isNot(original.chaveUnica),
+      );
+    });
   });
 
   group('Fluxo Lançamento manual (bottom sheet → form → date picker)', () {
