@@ -66,6 +66,20 @@ extension PaymentMethodX on PaymentMethod {
           orElse: () => PaymentMethod.outros);
 }
 
+/// Tipo do lançamento: despesa ou receita.
+enum EntryKind { despesa, receita }
+
+extension EntryKindX on EntryKind {
+  String get label => switch (this) {
+        EntryKind.despesa => 'Despesa',
+        EntryKind.receita => 'Receita',
+      };
+
+  static EntryKind fromName(String? name) =>
+      EntryKind.values.firstWhere((k) => k.name == name,
+          orElse: () => EntryKind.despesa);
+}
+
 /// Origem do lançamento.
 enum ExpenseOrigin { manual, ocr }
 
@@ -80,6 +94,7 @@ class Expense {
   final String descricao;
   final String estabelecimento;
   final ExpenseOrigin origem;
+  final EntryKind tipo;
   final String? fotoPath; // caminho da foto do cupom (opcional)
   final String? rawText; // texto OCR bruto (opcional)
 
@@ -92,9 +107,13 @@ class Expense {
     this.descricao = '',
     this.estabelecimento = '',
     this.origem = ExpenseOrigin.manual,
+    this.tipo = EntryKind.despesa,
     this.fotoPath,
     this.rawText,
   });
+
+  /// Atalho de leitura: receitas somam, despesas subtraem.
+  bool get isReceita => tipo == EntryKind.receita;
 
   Expense copyWith({
     int? id,
@@ -105,6 +124,7 @@ class Expense {
     String? descricao,
     String? estabelecimento,
     ExpenseOrigin? origem,
+    EntryKind? tipo,
     String? fotoPath,
     String? rawText,
   }) =>
@@ -117,6 +137,7 @@ class Expense {
         descricao: descricao ?? this.descricao,
         estabelecimento: estabelecimento ?? this.estabelecimento,
         origem: origem ?? this.origem,
+        tipo: tipo ?? this.tipo,
         fotoPath: fotoPath ?? this.fotoPath,
         rawText: rawText ?? this.rawText,
       );
@@ -130,6 +151,7 @@ class Expense {
         'descricao': descricao,
         'estabelecimento': estabelecimento,
         'origem': origem.name,
+        'tipo': tipo.name,
         'foto': fotoPath,
         'raw': rawText,
       };
@@ -146,13 +168,14 @@ class Expense {
         origem: (map['origem'] as String?) == 'ocr'
             ? ExpenseOrigin.ocr
             : ExpenseOrigin.manual,
+        tipo: EntryKindX.fromName(map['tipo'] as String?),
         fotoPath: map['foto'] as String?,
         rawText: map['raw'] as String?,
       );
 
   @override
   String toString() =>
-      'Expense(id: $id, valor: $valorCentavos, categoria: ${categoria.name}, '
+      'Expense(id: $id, tipo: ${tipo.name}, valor: $valorCentavos, categoria: ${categoria.name}, '
       'data: $dataHora, estabelecimento: $estabelecimento)';
 }
 

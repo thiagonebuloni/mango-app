@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:financ/db/db.dart';
 import 'package:financ/main.dart';
 import 'package:financ/models/models.dart';
 import 'package:financ/screens/capture_screen.dart';
@@ -107,6 +108,53 @@ void main() async {
     expect(find.textContaining('Nenhum gasto'), findsOneWidget);
   });
 
+  group('Backup CSV (exportar/importar)', () {
+    test('exportar → importar preserva despesas, receitas e textos com ";"',
+        () {
+      final originais = [
+        Expense(
+          valorCentavos: 12345,
+          dataHora: DateTime(2026, 8, 20, 9, 30),
+          categoria: Category.mercado,
+          forma: PaymentMethod.pix,
+          descricao: 'café; pão',
+          estabelecimento: 'MERCADO "BOM" LTDA',
+        ),
+        Expense(
+          valorCentavos: 50000,
+          dataHora: DateTime(2026, 9, 1, 8),
+          categoria: Category.outros,
+          forma: PaymentMethod.dinheiro,
+          estabelecimento: 'SALÁRIO',
+          tipo: EntryKind.receita,
+        ),
+      ];
+
+      final result = CsvBackup.import(CsvBackup.export(originais));
+
+      expect(result.skipped, 0);
+      expect(result.expenses, hasLength(2));
+
+      final despesa = result.expenses.singleWhere((e) => !e.isReceita);
+      expect(despesa.valorCentavos, 12345);
+      expect(despesa.dataHora, DateTime(2026, 8, 20, 9, 30));
+      expect(despesa.categoria, Category.mercado);
+      expect(despesa.forma, PaymentMethod.pix);
+      expect(despesa.descricao, 'café; pão');
+      expect(despesa.estabelecimento, 'MERCADO "BOM" LTDA');
+
+      final receita = result.expenses.singleWhere((e) => e.isReceita);
+      expect(receita.valorCentavos, 50000);
+      expect(receita.estabelecimento, 'SALÁRIO');
+    });
+
+    test('linhas inválidas são ignoradas (skipped)', () {
+      final result = CsvBackup.import('${CsvBackup.header}\nso um campo');
+      expect(result.expenses, isEmpty);
+      expect(result.skipped, 1);
+    });
+  });
+
   group('Fluxo Lançamento manual (bottom sheet → form → date picker)', () {
     testWidgets('tocar em Lançamento manual abre o formulário', (tester) async {
       await tester.pumpWidget(
@@ -119,15 +167,43 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
-      // Abre o menu (+) e toca em "Lançamento manual".
+      // Abre o menu (+), entra em "Despesas" e toca em "Lançamento manual".
       await tester.tap(find.byIcon(Icons.add));
       await tester.pumpAndSettle();
+      expect(find.text('Despesas'), findsOneWidget);
+      expect(find.text('Receita'), findsOneWidget);
+      await tester.tap(find.text('Despesas'));
+      await tester.pumpAndSettle();
+      expect(find.text('Foto do cupom fiscal'), findsOneWidget);
       await tester.tap(find.text('Lançamento manual'));
       await tester.pumpAndSettle();
 
       // O formulário manual deve ter sido empilhado.
-      expect(find.text('Novo gasto'), findsOneWidget);
+      expect(find.text('Nova despesa'), findsOneWidget);
       expect(find.text('Data e hora'), findsOneWidget);
+    });
+
+    testWidgets('tocar em Receita abre o formulário de receita',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+          ],
+          child: _makeApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Nível 1 do menu (+): "Receita" já abre o formulário, sem submenu.
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Receita'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nova receita'), findsOneWidget);
+      expect(find.text('Origem'), findsOneWidget);
+      expect(find.text('Lançamento manual'), findsNothing);
     });
 
     testWidgets('tocar em Data e hora abre o seletor de data', (tester) async {
@@ -460,6 +536,8 @@ void main() async {
 
       expect(find.text('Relatórios'), findsOneWidget);
       expect(find.text('Editar perfil'), findsOneWidget);
+      expect(find.text('Exportar em CSV'), findsOneWidget);
+      expect(find.text('Importar em CSV'), findsOneWidget);
       expect(find.text('Sobre o Financ'), findsOneWidget);
     });
 

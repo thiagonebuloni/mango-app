@@ -39,6 +39,15 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
     await DBHelper.instance.deleteExpense(id);
     await _reload();
   }
+
+  /// Substitui todos os lançamentos pelos do backup CSV importado.
+  Future<void> restoreAll(List<Expense> expenses) async {
+    await DBHelper.instance.clearExpenses();
+    if (expenses.isNotEmpty) {
+      await DBHelper.instance.insertExpensesBatch(expenses);
+    }
+    await _reload();
+  }
 }
 
 final expensesProvider =
@@ -72,12 +81,29 @@ final profileProvider =
     AsyncNotifierProvider<ProfileNotifier, UserProfile?>(ProfileNotifier.new);
 
 /// Sumários diário/semanal/mensal derivados da lista carregada.
+///
+/// [dia]/[semana]/[mes] somam só despesas; [receitasDia]/[receitasSemana]/
+/// [receitasMes] somam só receitas e [saldo*] = receitas − despesas.
 class PeriodSummary {
   final int dia;
   final int semana;
   final int mes;
+  final int receitasDia;
+  final int receitasSemana;
+  final int receitasMes;
 
-  const PeriodSummary({required this.dia, required this.semana, required this.mes});
+  const PeriodSummary({
+    required this.dia,
+    required this.semana,
+    required this.mes,
+    this.receitasDia = 0,
+    this.receitasSemana = 0,
+    this.receitasMes = 0,
+  });
+
+  int get saldoDia => receitasDia - dia;
+  int get saldoSemana => receitasSemana - semana;
+  int get saldoMes => receitasMes - mes;
 }
 
 PeriodSummary summarize(List<Expense> expenses, DateTime now) {
@@ -85,12 +111,38 @@ PeriodSummary summarize(List<Expense> expenses, DateTime now) {
   final w0 = Periods.startOfWeek(now);
   final m0 = Periods.startOfMonth(now);
   int dia = 0, semana = 0, mes = 0;
+  int rDia = 0, rSemana = 0, rMes = 0;
   for (final e in expenses) {
-    if (!e.dataHora.isBefore(d0)) dia += e.valorCentavos;
-    if (!e.dataHora.isBefore(w0)) semana += e.valorCentavos;
-    if (!e.dataHora.isBefore(m0)) mes += e.valorCentavos;
+    if (!e.dataHora.isBefore(d0)) {
+      if (e.isReceita) {
+        rDia += e.valorCentavos;
+      } else {
+        dia += e.valorCentavos;
+      }
+    }
+    if (!e.dataHora.isBefore(w0)) {
+      if (e.isReceita) {
+        rSemana += e.valorCentavos;
+      } else {
+        semana += e.valorCentavos;
+      }
+    }
+    if (!e.dataHora.isBefore(m0)) {
+      if (e.isReceita) {
+        rMes += e.valorCentavos;
+      } else {
+        mes += e.valorCentavos;
+      }
+    }
   }
-  return PeriodSummary(dia: dia, semana: semana, mes: mes);
+  return PeriodSummary(
+    dia: dia,
+    semana: semana,
+    mes: mes,
+    receitasDia: rDia,
+    receitasSemana: rSemana,
+    receitasMes: rMes,
+  );
 }
 
 /// Relatórios: gastos do período em aberto, reativos ao expensesProvider.
@@ -121,29 +173,47 @@ PeriodRange periodRange(DateTime now, dynamic period, DateTimeRange? custom) {
   return PeriodRange(start: m0, end: now);
 }
 
-Map<Category, int> sumByCategory(Iterable<Expense> expenses) {
+Map<Category, int> sumByCategory(Iterable<Expense> expenses,
+    {bool receitas = false}) {
   final map = <Category, int>{};
   for (final e in expenses) {
+    if (e.isReceita != receitas) continue;
     map[e.categoria] = (map[e.categoria] ?? 0) + e.valorCentavos;
   }
   return map;
 }
 
-Map<PaymentMethod, int> sumByPayment(Iterable<Expense> expenses) {
+Map<PaymentMethod, int> sumByPayment(Iterable<Expense> expenses,
+    {bool receitas = false}) {
   final map = <PaymentMethod, int>{};
   for (final e in expenses) {
+    if (e.isReceita != receitas) continue;
     map[e.forma] = (map[e.forma] ?? 0) + e.valorCentavos;
   }
   return map;
 }
 
+/// Soma só despesas (receitas entram separadas via [totalReceitas]).
 int totalOf(Iterable<Expense> expenses) {
   int t = 0;
   for (final e in expenses) {
-    t += e.valorCentavos;
+    if (!e.isReceita) t += e.valorCentavos;
   }
   return t;
 }
+
+/// Soma só receitas no iterável.
+int totalReceitas(Iterable<Expense> expenses) {
+  int t = 0;
+  for (final e in expenses) {
+    if (e.isReceita) t += e.valorCentavos;
+  }
+  return t;
+}
+
+/// Saldo = receitas − despesas.
+int saldoOf(Iterable<Expense> expenses) =>
+    totalReceitas(expenses) - totalOf(expenses);
 
 /// Agrupa gastos por dia, retornando um mapa onde a chave é a data (sem hora)
 /// e o valor é o total em centavos daquele dia.

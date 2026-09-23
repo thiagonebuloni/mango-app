@@ -21,8 +21,10 @@ class ReceiptDraftData {
 class ExpenseFormScreen extends ConsumerStatefulWidget {
   final Expense? expense; // edição
   final ReceiptDraftData? fromDraft; // pré-preenchido pelo OCR
+  final EntryKind tipoInicial; // despesa ou receita (novo lançamento)
 
-  const ExpenseFormScreen({super.key, this.expense}) : fromDraft = null;
+  const ExpenseFormScreen({super.key, this.expense, this.tipoInicial = EntryKind.despesa})
+      : fromDraft = null;
 
   // ignore: prefer_const_constructors_in_immutables
   ExpenseFormScreen.fromReceipt({
@@ -31,6 +33,7 @@ class ExpenseFormScreen extends ConsumerStatefulWidget {
     required Category categoria,
     required String fotoPath,
   })  : expense = null,
+        tipoInicial = EntryKind.despesa,
         fromDraft = ReceiptDraftData(draft, categoria, fotoPath);
 
   @override
@@ -44,9 +47,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   late final TextEditingController _descricao;
   late Category _categoria;
   late PaymentMethod _forma;
+  late EntryKind _tipo;
   DateTime _dataHora = DateTime.now();
 
   bool get _isEdit => widget.expense != null;
+  bool get _isReceita => _tipo == EntryKind.receita;
   bool _saving = false;
 
   bool get hasUnsavedChanges {
@@ -68,6 +73,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     if (_forma != (e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros)) {
       return true;
     }
+    if (_tipo != (e?.tipo ?? widget.tipoInicial)) return true;
     if (_dataHora != (e?.dataHora ?? d?.draft.dataHora ?? DateTime.now())) {
       return true;
     }
@@ -90,6 +96,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _descricao = TextEditingController(text: e?.descricao ?? '');
     _categoria = e?.categoria ?? d?.categoria ?? Category.outros;
     _forma = e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros;
+    _tipo = e?.tipo ?? widget.tipoInicial;
     _dataHora = e?.dataHora ?? d?.draft.dataHora ?? DateTime.now();
   }
 
@@ -137,6 +144,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       dataHora: _dataHora,
       categoria: _categoria,
       forma: _forma,
+      tipo: _tipo,
       descricao: _descricao.text.trim(),
       estabelecimento: _estabelecimento.text.trim(),
     );
@@ -158,6 +166,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       dataHora: _dataHora,
       categoria: _categoria,
       forma: _forma,
+      tipo: _tipo,
       origem: d != null ? ExpenseOrigin.ocr : ExpenseOrigin.manual,
       fotoPath: d?.fotoPath,
       rawText: d?.draft.textoOcr,
@@ -208,13 +217,34 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_isEdit ? 'Editar gasto' : 'Novo gasto'),
+          title: Text(_isEdit
+              ? 'Editar ${_isReceita ? 'receita' : 'gasto'}'
+              : 'Nova ${_isReceita ? 'receita' : 'despesa'}'),
         ),
         body: Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (!_isEdit && d == null)
+                SegmentedButton<EntryKind>(
+                  segments: const [
+                    ButtonSegment(
+                      value: EntryKind.despesa,
+                      icon: Icon(Icons.shopping_cart_outlined),
+                      label: Text('Despesa'),
+                    ),
+                    ButtonSegment(
+                      value: EntryKind.receita,
+                      icon: Icon(Icons.attach_money),
+                      label: Text('Receita'),
+                    ),
+                  ],
+                  selected: {_tipo},
+                  onSelectionChanged: (sel) =>
+                      setState(() => _tipo = sel.first),
+                ),
+              if (!_isEdit && d == null) const SizedBox(height: 8),
               if (d != null) ...[
                 Card(
                   color: Colors.teal.withValues(alpha: 0.08),
@@ -259,8 +289,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _estabelecimento,
-                decoration: const InputDecoration(
-                    labelText: 'Estabelecimento'),
+                decoration: InputDecoration(
+                    labelText: _isReceita ? 'Origem' : 'Estabelecimento'),
                 textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 12),

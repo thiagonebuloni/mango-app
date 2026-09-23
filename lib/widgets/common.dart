@@ -99,8 +99,12 @@ class ExpenseTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       trailing: Text(
-        formatBRL(e.valorCentavos),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        e.isReceita ? '+ ${formatBRL(e.valorCentavos)}' : formatBRL(e.valorCentavos),
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+          color: e.isReceita ? const Color(0xFF059669) : null,
+        ),
       ),
     );
   }
@@ -120,11 +124,16 @@ double newExpenseFabClearance(BuildContext context) =>
     kFloatingActionButtonMargin * 2 +
     MediaQuery.paddingOf(context).bottom;
 
+/// Seções do menu de novo lançamento: nível inicial (Despesas / Receita) e
+/// opções de despesa (foto do cupom ou lançamento manual).
+enum _SecaoLancamento { inicial, despesas }
+
 /// Widget reutilizável: FAB + bottom sheet para iniciar um novo lançamento.
 ///
-/// Usado por [HomeScreen] e [ReportsScreen] para garantir que o botão
-/// "Novo Gasto" esteja acessível em todas as telas. O [heroTag] deve ser
-/// único por tela para evitar conflitos entre FABs no mesmo Navigator.
+/// Primeiro nível com **Despesas** e **Receita**; ao escolher Despesas
+/// aparecem as opções de foto do cupom ou lançamento manual. Usado por
+/// [HomeScreen] e [ReportsScreen]. O [heroTag] deve ser único por tela para
+/// evitar conflitos entre FABs no mesmo Navigator.
 class NewExpenseMenu extends StatelessWidget {
   final String heroTag;
   final VoidCallback? onAdded;
@@ -141,35 +150,79 @@ class NewExpenseMenu extends StatelessWidget {
   }
 
   void _showAddMenu(BuildContext pageContext) {
+    // Nível 1: Despesas | Receita. Nível 2 (despesas): foto ou manual.
+    var secao = _SecaoLancamento.inicial;
     showModalBottomSheet<void>(
       context: pageContext,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera),
-              title: const Text('Foto do cupom fiscal'),
-              subtitle: const Text('O app lê e preenche os dados'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(pageContext).push(
-                  MaterialPageRoute(builder: (_) => const CaptureScreen()),
-                ).then((_) => onAdded?.call());
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Lançamento manual'),
-              subtitle: const Text('Digite o gasto à mão'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(pageContext).push(
-                  MaterialPageRoute(builder: (_) => const ExpenseFormScreen()),
-                ).then((_) => onAdded?.call());
-              },
-            ),
-          ],
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (secao == _SecaoLancamento.inicial) ...[
+                ListTile(
+                  leading: const Icon(Icons.shopping_cart_outlined),
+                  title: const Text('Despesas'),
+                  subtitle: const Text('Foto do cupom ou lançamento manual'),
+                  onTap: () =>
+                      setSheetState(() => secao = _SecaoLancamento.despesas),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.attach_money),
+                  title: const Text('Receita'),
+                  subtitle: const Text('Lançamento manual de entrada'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(pageContext)
+                        .push(
+                          MaterialPageRoute(
+                            builder: (_) => const ExpenseFormScreen(
+                              tipoInicial: EntryKind.receita,
+                            ),
+                          ),
+                        )
+                        .then((_) => onAdded?.call());
+                  },
+                ),
+              ] else ...[
+                ListTile(
+                  leading: const Icon(Icons.arrow_back),
+                  title: const Text('Despesas'),
+                  subtitle: const Text('Foto do cupom ou lançamento manual'),
+                  onTap: () =>
+                      setSheetState(() => secao = _SecaoLancamento.inicial),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera),
+                  title: const Text('Foto do cupom fiscal'),
+                  subtitle: const Text('O app lê e preenche os dados'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(pageContext)
+                        .push(
+                          MaterialPageRoute(builder: (_) => const CaptureScreen()),
+                        )
+                        .then((_) => onAdded?.call());
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Lançamento manual'),
+                  subtitle: const Text('Digite o gasto à mão'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(pageContext)
+                        .push(
+                          MaterialPageRoute(
+                              builder: (_) => const ExpenseFormScreen()),
+                        )
+                        .then((_) => onAdded?.call());
+                  },
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

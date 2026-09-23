@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -22,6 +24,7 @@ class DBHelper {
       descricao TEXT,
       estabelecimento TEXT,
       origem TEXT,
+      tipo TEXT NOT NULL DEFAULT 'despesa',
       foto TEXT,
       raw TEXT
     )
@@ -44,8 +47,9 @@ class DBHelper {
     )
   ''';
 
-  /// v1 = gastos + memória de categorias; v2 = perfil do usuário.
-  static const _dbVersion = 2;
+  /// v1 = gastos + memória de categorias; v2 = perfil do usuário;
+  /// v3 = coluna `tipo` (despesa/receita) em expenses.
+  static const _dbVersion = 3;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -60,6 +64,10 @@ class DBHelper {
       },
       onUpgrade: (db, oldVersion, _) async {
         if (oldVersion < 2) await db.execute(_profileTable);
+        if (oldVersion < 3) {
+          await db.execute(
+              "ALTER TABLE expenses ADD COLUMN tipo TEXT NOT NULL DEFAULT 'despesa'");
+        }
       },
     );
   }
@@ -182,6 +190,141 @@ class DBHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+
+  /// Apaga todos os lançamentos (usado antes de restaurar um backup CSV).
+  Future<void> clearExpenses() async {
+    await db.delete('expenses');
+  }
+
+  /// Insere vários lançamentos em lote (importação de backup CSV).
+  Future<void> insertExpensesBatch(List<Expense> expenses) async {
+    final batch = db.batch();
+    for (final e in expenses) {
+      final map = e.toMap()..remove('id');
+      batch.insert('expenses', map);
+    }
+    await batch.commit(noResult: true);
+  }
+}
+
+/// Backup CSV dos lançamentos (exportar/importar).
+///
+/// Formato: cabeçalho `tipo;valor;data_hora;categoria;forma;descricao;
+/// estabelecimento;origem` com `;` como separador (padrão BR, abre direto
+/// no Excel/LibreOffice) e campos de texto entre aspas com escape `""`.
+/// A data vai em ISO-8601 (`2026-03-15T12:30:00.000`) e o valor em
+/// centavos (inteiro), para não perder precisão nem depender de locale.
+class CsvBackup {
+  static const header =
+      'tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem';
+
+  static String _esc(String value) =>
+      '"${value.replaceAll('"', '""')}"';
+
+  /// Serializa os lançamentos para o texto CSV.
+  static String export(List<Expense> expenses) {
+    final sorted = expenses.toList()
+      ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
+    final buf = StringBuffer(header);
+    for (final e in sorted) {
+      buf
+        ..write('\n')
+        ..write(e.tipo.name)
+        ..write(';')
+        ..write(e.valorCentavos)
+        ..write(';')
+        ..write(e.dataHora.toIso8601String())
+        ..write(';')
+        ..write(e.categoria.name)
+        ..write(';')
+        ..write(e.forma.name)
+        ..write(';')
+        ..write(_esc(e.descricao))
+        ..write(';')
+        ..write(_esc(e.estabelecimento))
+        ..write(';')
+        ..write(e.origem.name);
+    }
+    return buf.toString();
+  }
+
+  /// Resultado da importação: lançamentos válidos + linhas ignoradas.
+  static CsvImportResult import(String csvText) {
+    final lines = const LineSplitter().convert(csvText.trim());
+    if (lines.isEmpty) {
+      return const CsvImportResult(expenses: [], skipped: 0);
+    }
+    final expenses = <Expense>[];
+    var skipped = 0;
+    final start = lines.first.trim() == header ? 1 : 0;
+    for (var i = start; i < lines.length; i++) {
+      final expense = _parseLine(lines[i]);
+      if (expense == null) {
+        skipped++;
+      } else {
+        expenses.add(expense);
+      }
+    }
+    return CsvImportResult(expenses: expenses, skipped: skipped);
+  }
+
+  /// Quebra a linha respeitando aspas (`;` dentro de `"..."` não separa).
+  static List<String> _splitLine(String line) {
+    final fields = <String>[];
+    final buf = StringBuffer();
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      final ch = line[i];
+      if (inQuotes) {
+        if (ch == '"') {
+          if (i + 1 < line.length && line[i + 1] == '"') {
+            buf.write('"');
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          buf.write(ch);
+        }
+      } else if (ch == '"') {
+        inQuotes = true;
+      } else if (ch == ';') {
+        fields.add(buf.toString());
+        buf.clear();
+      } else {
+        buf.write(ch);
+      }
+    }
+    fields.add(buf.toString());
+    return fields;
+  }
+
+  static Expense? _parseLine(String line) {
+    if (line.trim().isEmpty) return null;
+    final f = _splitLine(line);
+    if (f.length != 8) return null;
+    final valor = int.tryParse(f[1].trim());
+    final data = DateTime.tryParse(f[2].trim());
+    if (valor == null || valor <= 0 || data == null) return null;
+    return Expense(
+      tipo: EntryKindX.fromName(f[0].trim()),
+      valorCentavos: valor,
+      dataHora: data,
+      categoria: CategoryX.fromName(f[3].trim()),
+      forma: PaymentMethodX.fromName(f[4].trim()),
+      descricao: f[5],
+      estabelecimento: f[6],
+      origem: f[7].trim() == 'ocr' ? ExpenseOrigin.ocr : ExpenseOrigin.manual,
+    );
+  }
+}
+
+/// Resultado de [CsvBackup.import].
+class CsvImportResult {
+  final List<Expense> expenses;
+  final int skipped;
+
+  const CsvImportResult({required this.expenses, required this.skipped});
 }
 
 /// Limites de período usados na Home e nos relatórios (semana começa na

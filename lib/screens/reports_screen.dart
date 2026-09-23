@@ -81,7 +81,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         error: (e, _) => Center(child: Text('Erro ao carregar dados: $e')),
         data: (expenses) {
           final pr = periodRange;
-          final inPeriod = expenses.where((e) => pr.contains(e.dataHora)).toList();
+          // Os relatórios resumem apenas despesas: receitas ficam de fora
+          // dos totais (categoria/pagamento/dia) e das listas expansíveis,
+          // senão os cartões de detalhe não fecham com o total do período.
+          final inPeriod = expenses
+              .where((e) => pr.contains(e.dataHora) && !e.isReceita)
+              .toList();
           final byCategory = sumByCategory(inPeriod);
           final byPayment = sumByPayment(inPeriod);
           final total = totalOf(inPeriod);
