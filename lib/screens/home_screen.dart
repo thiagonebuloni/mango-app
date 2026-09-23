@@ -12,7 +12,11 @@ import '../widgets/common.dart';
 enum _FiltroRapido { dia, semana, mes }
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  /// Troca para a aba de Relatórios (vindo da navegação raiz). `null` quando
+  /// a tela é usada fora dela: o item do menu apenas fecha.
+  final VoidCallback? onVerRelatorios;
+
+  const HomeScreen({super.key, this.onVerRelatorios});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -225,7 +229,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final expensesAsync = ref.watch(expensesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Meus gastos')),
+      appBar: AppBar(
+        title: const Text('Meus gastos'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            tooltip: 'Menu',
+            onPressed: () => showMenuApp(
+              context,
+              ref,
+              onIrParaRelatorios: widget.onVerRelatorios,
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: NewExpenseMenu(
         heroTag: 'fab',
         onAdded: () => ref.invalidate(expensesProvider),

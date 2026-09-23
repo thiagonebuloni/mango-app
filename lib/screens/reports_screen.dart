@@ -71,7 +71,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final expensesAsync = ref.watch(expensesForReportsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Relatórios')),
+      appBar: AppBar(
+        title: const Text('Relatórios'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            tooltip: 'Menu',
+            onPressed: () => showMenuApp(context, ref),
+          ),
+        ],
+      ),
       floatingActionButton: NewExpenseMenu(
         heroTag: 'fab_reports',
         onAdded: () => ref.invalidate(expensesProvider),

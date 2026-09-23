@@ -567,6 +567,64 @@ void main() async {
       expect(find.text('Sobre o Financ'), findsOneWidget);
     });
 
+    testWidgets('telas Gastos e Relatórios têm ícone de menu no AppBar',
+        (tester) async {
+      // Os dois scopes precisam da MESMA lista de overrides: reutilizar o
+      // ProviderScope com overrides diferentes dispara erro do Riverpod.
+      final overrides = [
+        expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+        expensesForReportsProvider
+            .overrideWith(() => _FakeReportsNotifier()),
+      ];
+
+      // Tela Gastos.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: overrides,
+          child: _makeApp(home: const HomeScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byIcon(Icons.menu),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Editar perfil'), findsOneWidget);
+      expect(find.text('Exportar em CSV'), findsOneWidget);
+      expect(find.text('Importar em CSV'), findsOneWidget);
+      expect(find.text('Sobre o Financ'), findsOneWidget);
+
+      // Fecha o sheet antes de trocar de tela: o scrim dele bloquearia o
+      // tap no ícone de menu da próxima tela.
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      // Tela Relatórios: mesmo menu.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: overrides,
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byIcon(Icons.menu),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Editar perfil'), findsOneWidget);
+      expect(find.text('Exportar em CSV'), findsOneWidget);
+      expect(find.text('Sobre o Financ'), findsOneWidget);
+    });
+
+
     testWidgets('"Editar perfil" salva as alterações', (tester) async {
       final notifier = _FakeProfileNotifier(_perfilTeste);
       await abrirTelaInicial(tester, perfil: notifier);

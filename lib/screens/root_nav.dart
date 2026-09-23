@@ -49,9 +49,9 @@ class _RootNavState extends State<RootNav> {
         controller: _pageController,
         physics: const BouncingScrollPhysics(),
         onPageChanged: _onPageChanged,
-        children: const [
-          HomeScreen(),
-          ReportsScreen(),
+        children: [
+          HomeScreen(onVerRelatorios: () => _onDestinationSelected(1)),
+          const ReportsScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
