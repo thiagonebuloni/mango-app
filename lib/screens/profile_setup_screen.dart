@@ -191,7 +191,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fundoPrevia = _temaClaro ? _cor : fundoEscuroDaCor(_cor);
+    // Prévia do fundo: cor escolhida no tema claro; cinza escuro fixo no
+    // tema escuro (igual ao resto do app — ver [kFundoTemaEscuro]).
+    final fundoPrevia = _temaClaro ? _cor : kFundoTemaEscuro;
     final onCor = onBackgroundColor(fundoPrevia);
 
     return PopScope<Object?>(
@@ -291,12 +293,36 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           controller: _nome,
           textCapitalization: TextCapitalization.words,
           maxLength: 24,
+          // Cor explícita a partir da prévia do fundo (não do Theme do app):
+          // ao alternar o tema na edição, o Scaffold mostra a prévia mas o
+          // Theme ainda é o do perfil salvo — sem isto o texto herdaria a cor
+          // errada (ex.: branco sobre fundo claro, sem contraste).
+          style: TextStyle(color: onCor),
           decoration: InputDecoration(
             labelText: 'Nome do usuário',
+            labelStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
+            floatingLabelStyle: TextStyle(color: onCor),
             prefixIcon: const Icon(Icons.person_outline),
+            prefixIconColor: onCor.withValues(alpha: 0.7),
+            suffixIconColor: onCor.withValues(alpha: 0.7),
+            counterStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
+            errorStyle: const TextStyle(color: Colors.redAccent),
             filled: true,
             fillColor: onCor.withValues(alpha: 0.05),
             counterText: '',
+            enabledBorder: OutlineInputBorder(
+              borderSide:
+                  BorderSide(color: onCor.withValues(alpha: 0.35)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: onCor, width: 1.6),
+            ),
+            errorBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.redAccent),
+            ),
+            focusedErrorBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.redAccent, width: 1.6),
+            ),
             border: const OutlineInputBorder(),
           ),
           validator: (v) =>

@@ -834,25 +834,21 @@ void main() async {
       );
     });
 
-    testWidgets('fundo escuro preserva o matiz da cor escolhida',
+    testWidgets('fundo escuro é sempre cinza escuro fixo',
         (tester) async {
       const claro = Color(0xFFE3F2FD); // azul claro da paleta
       const escuro = Color(0xFF1E3A5F); // azul escuro correspondente
-      final fundo = corFundoDoPerfil(
-        const UserProfile(
-          nome: 'Ana',
-          avatar: '🦊',
-          corFundo: 0xFFE3F2FD,
-          temaClaro: false,
-        ),
-      );
-      final matizClaro = HSLColor.fromColor(claro).hue;
-      final matizFundo = HSLColor.fromColor(fundo).hue;
-      final delta = (matizClaro - matizFundo).abs();
-      final distancia = delta > 180 ? 360 - delta : delta;
-      expect(fundo.toARGB32() == claro.toARGB32(), isFalse);
-      expect(HSLColor.fromColor(fundo).lightness, lessThan(0.2));
-      expect(distancia, lessThan(12));
+      for (final cor in [claro, escuro]) {
+        final fundo = corFundoDoPerfil(
+          UserProfile(
+            nome: 'Ana',
+            avatar: '🦊',
+            corFundo: cor.toARGB32(),
+            temaClaro: false,
+          ),
+        );
+        expect(fundo, kFundoTemaEscuro);
+      }
       expect(corDestaqueDoPerfil(_perfilTeste), isNull);
       expect(
         corDestaqueDoPerfil(
@@ -920,6 +916,11 @@ void main() async {
         kCoresTemaClaro[1],
       );
 
+      // Tema claro: nome do usuário com fonte escura para contraste.
+      final campoClaro =
+          tester.widget<TextField>(find.byType(TextField).first);
+      expect(campoClaro.style?.color, onBackgroundColor(kCoresTemaClaro[1]));
+
       await tester.ensureVisible(find.text('Tema escuro'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Tema escuro'));
@@ -931,6 +932,15 @@ void main() async {
             .color,
         kCoresTemaEscuro[1],
       );
+
+      // Prévia do tema escuro: fundo sempre cinza escuro fixo.
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+        kFundoTemaEscuro,
+      );
+      final campoEscuro =
+          tester.widget<TextField>(find.byType(TextField).first);
+      expect(campoEscuro.style?.color, onBackgroundColor(kFundoTemaEscuro));
 
       await tester.ensureVisible(find.text('Salvar'));
       await tester.pumpAndSettle();

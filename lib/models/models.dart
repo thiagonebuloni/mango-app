@@ -249,7 +249,7 @@ class UserProfile {
   /// Valores usados quando o usuário ainda não escolheu nada.
   static const String avatarPadrao = '🐸';
   static const int corFundoPadrao = 0xFFE0F2F1;
-  static const int corFundoEscuroPadrao = 0xFF10201E;
+  static const int corFundoEscuroPadrao = 0xFF33393B;
 
   UserProfile copyWith({
     String? nome,

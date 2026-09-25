@@ -34,6 +34,13 @@ const List<Color> kCoresTemaEscuro = [
 /// tema claro.
 bool temaClaroDoPerfil(UserProfile? perfil) => perfil?.temaClaro ?? true;
 
+/// Fundo fixo do **tema escuro**: cinza escuro, independente da cor escolhida.
+///
+/// A cor escolhida pelo usuário continua valendo no tema escuro, mas só nas
+/// caixas destacadas de Gastos/Relatórios (ver [corDestaqueDoPerfil]) — o
+/// fundo do app é sempre este cinza para manter o contraste.
+const Color kFundoTemaEscuro = Color(0xFF0d0f0f);
+
 /// Índice da [cor] na [paleta], ou `-1` quando ela não é uma das opções.
 int _indiceNaPaleta(Color cor, List<Color> paleta) {
   for (var i = 0; i < paleta.length; i++) {
@@ -51,21 +58,13 @@ Color corNaPaleta(Color cor, List<Color> origem, List<Color> destino) {
   return destino[i.clamp(0, destino.length - 1)];
 }
 
-/// Fundo escuro derivado da cor escolhida: quase preto, mas com o mesmo matiz
-/// (HSL com luminosidade baixa e saturação preservada).
-Color fundoEscuroDaCor(Color cor) {
-  final hsl = HSLColor.fromColor(cor);
-  return hsl
-      .withLightness(0.11)
-      .withSaturation(hsl.saturation.clamp(0.35, 0.85))
-      .toColor();
-}
-
 /// Cor de fundo efetiva do app: a escolhida no perfil no tema claro; no tema
-/// escuro, um fundo quase preto com o matiz da cor escolhida.
+/// escuro, sempre o cinza escuro fixo ([kFundoTemaEscuro]).
 ///
 /// Se um perfil antigo (ou editado à mão) combinar tema escuro com uma cor da
-/// paleta clara, converte para o tom escuro correspondente — e vice-versa.
+/// paleta clara, o fundo continua cinza escuro — a cor escolhida aparece só
+/// nas caixas destacadas (ver [corDestaqueDoPerfil]). E vice-versa: tema
+/// claro com cor da paleta escura volta para o tom claro correspondente.
 Color corFundoDoPerfil(UserProfile? perfil) {
   if (perfil == null) return const Color(UserProfile.corFundoPadrao);
   final cor = Color(perfil.corFundo);
@@ -74,9 +73,7 @@ Color corFundoDoPerfil(UserProfile? perfil) {
     if (i >= 0) return kCoresTemaClaro[i];
     return cor;
   }
-  final i = _indiceNaPaleta(cor, kCoresTemaClaro);
-  final escolhida = i >= 0 ? kCoresTemaEscuro[i] : cor;
-  return fundoEscuroDaCor(escolhida);
+  return kFundoTemaEscuro;
 }
 
 /// Cor de destaque do tema escuro: a cor escolhida pelo usuário, usada nas
