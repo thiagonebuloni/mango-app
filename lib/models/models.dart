@@ -1,6 +1,10 @@
 // Modelos de domínio do app Financ.
 
-/// Categorias de gasto (pré-definidas para manter o app leve e simples).
+/// Categorias de lançamento (pré-definidas para manter o app leve e simples).
+///
+/// Despesas: alimentação, transporte, mercado, saúde, lazer, moradia e outros.
+/// Receitas: salário, investimentos, bonificação, freelance, renda extra,
+/// aluguel e pensão.
 enum Category {
   alimentacao,
   transporte,
@@ -9,9 +13,45 @@ enum Category {
   lazer,
   moradia,
   outros,
+  salario,
+  investimentos,
+  bonificacao,
+  freelance,
+  rendaExtra,
+  aluguel,
+  pensao,
 }
 
 extension CategoryX on Category {
+  /// Categorias oferecidas no formulário de despesa.
+  static const List<Category> despesas = [
+    Category.alimentacao,
+    Category.transporte,
+    Category.mercado,
+    Category.saude,
+    Category.lazer,
+    Category.moradia,
+    Category.outros,
+  ];
+
+  /// Categorias oferecidas no formulário de receita.
+  static const List<Category> receitas = [
+    Category.salario,
+    Category.investimentos,
+    Category.bonificacao,
+    Category.freelance,
+    Category.rendaExtra,
+    Category.aluguel,
+    Category.pensao,
+  ];
+
+  /// `true` para categorias de receita, `false` para categorias de despesa.
+  bool get isReceita => CategoryX.receitas.contains(this);
+
+  /// Categorias válidas para o [tipo] de lançamento.
+  static List<Category> paraTipo(EntryKind tipo) =>
+      tipo == EntryKind.receita ? receitas : despesas;
+
   String get label {
     switch (this) {
       case Category.alimentacao:
@@ -28,12 +68,35 @@ extension CategoryX on Category {
         return 'Moradia';
       case Category.outros:
         return 'Outros';
+      case Category.salario:
+        return 'Salário';
+      case Category.investimentos:
+        return 'Investimentos';
+      case Category.bonificacao:
+        return 'Bonificação';
+      case Category.freelance:
+        return 'Freelance';
+      case Category.rendaExtra:
+        return 'Renda extra';
+      case Category.aluguel:
+        return 'Aluguel';
+      case Category.pensao:
+        return 'Pensão';
     }
   }
 
-  static Category fromName(String? name) =>
-      Category.values.firstWhere((c) => c.name == name,
-          orElse: () => Category.outros);
+  static Category fromName(String? name, {EntryKind? tipo}) {
+    final found = Category.values
+        .where((c) => c.name == name)
+        .cast<Category?>();
+    final exact = found.isEmpty ? null : found.first;
+    if (exact != null) return exact;
+    // Migração de dados antigos: receita salva com categoria de despesa
+    // ("Outros") vira Salário; despesa salva com categoria de receita
+    // (não deveria acontecer) volta para Outros.
+    if (tipo == EntryKind.receita) return Category.salario;
+    return Category.outros;
+  }
 }
 
 /// Formas de pagamento suportadas (vocábulo dos cupons brasileiros).
@@ -176,7 +239,10 @@ class Expense {
         valorCentavos: map['valor'] as int,
         dataHora:
             DateTime.fromMillisecondsSinceEpoch(map['data_hora'] as int),
-        categoria: CategoryX.fromName(map['categoria'] as String?),
+        categoria: CategoryX.fromName(
+          map['categoria'] as String?,
+          tipo: EntryKindX.fromName(map['tipo'] as String?),
+        ),
         forma: PaymentMethodX.fromName(map['forma'] as String?),
         descricao: (map['descricao'] as String?) ?? '',
         estabelecimento: (map['estabelecimento'] as String?) ?? '',

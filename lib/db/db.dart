@@ -313,11 +313,12 @@ class CsvBackup {
     final valor = int.tryParse(f[1].trim());
     final data = DateTime.tryParse(f[2].trim());
     if (valor == null || valor <= 0 || data == null) return null;
+    final tipo = EntryKindX.fromName(f[0].trim());
     return Expense(
-      tipo: EntryKindX.fromName(f[0].trim()),
+      tipo: tipo,
       valorCentavos: valor,
       dataHora: data,
-      categoria: CategoryX.fromName(f[3].trim()),
+      categoria: CategoryX.fromName(f[3].trim(), tipo: tipo),
       forma: PaymentMethodX.fromName(f[4].trim()),
       descricao: f[5],
       estabelecimento: f[6],

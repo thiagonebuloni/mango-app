@@ -52,6 +52,27 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
 
   bool get _isEdit => widget.expense != null;
   bool get _isReceita => _tipo == EntryKind.receita;
+
+  /// Categoria padrão quando o tipo troca ou não há valor inicial válido.
+  static Category _padraoPara(EntryKind tipo) =>
+      tipo == EntryKind.receita ? Category.salario : Category.outros;
+
+  /// Opções de categoria do formulário: só as do tipo atual.
+  /// Em edição de lançamentos antigos (ex.: receita salva como "Outros"),
+  /// mantém o valor atual como item extra para não quebrar o Dropdown.
+  List<Category> get _opcoesCategoria {
+    final opcoes = CategoryX.paraTipo(_tipo).toList();
+    if (!opcoes.contains(_categoria)) opcoes.add(_categoria);
+    return opcoes;
+  }
+
+  Category _categoriaInicial() {
+    final e = widget.expense;
+    if (e != null) return e.categoria;
+    final d = widget.fromDraft;
+    if (d != null) return d.categoria;
+    return _padraoPara(widget.tipoInicial);
+  }
   bool _saving = false;
 
   bool get hasUnsavedChanges {
@@ -67,7 +88,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     final currentDescricao = _descricao.text.trim();
     final originalDescricao = e?.descricao ?? '';
     if (currentDescricao != originalDescricao) return true;
-    if (_categoria != (e?.categoria ?? d?.categoria ?? Category.outros)) {
+    if (_categoria != (e?.categoria ?? d?.categoria ?? _padraoPara(_tipo))) {
       return true;
     }
     if (_forma != (e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros)) {
@@ -94,9 +115,13 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _estabelecimento = TextEditingController(
         text: e?.estabelecimento ?? d?.draft.estabelecimento ?? '');
     _descricao = TextEditingController(text: e?.descricao ?? '');
-    _categoria = e?.categoria ?? d?.categoria ?? Category.outros;
-    _forma = e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros;
     _tipo = e?.tipo ?? widget.tipoInicial;
+    final inicial = _categoriaInicial();
+    // Garante que a categoria inicial pertence ao tipo (ex.: trocar o tipo
+    // reinicia para um valor válido; OCR sempre cai em despesa).
+    _categoria =
+        CategoryX.paraTipo(_tipo).contains(inicial) ? inicial : _padraoPara(_tipo);
+    _forma = e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros;
     _dataHora = e?.dataHora ?? d?.draft.dataHora ?? DateTime.now();
   }
 
@@ -241,8 +266,15 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                     ),
                   ],
                   selected: {_tipo},
-                  onSelectionChanged: (sel) =>
-                      setState(() => _tipo = sel.first),
+                  onSelectionChanged: (sel) {
+                    final novo = sel.first;
+                    setState(() {
+                      _tipo = novo;
+                      // Trocar despesa ↔ receita reinicia para uma categoria
+                      // válida do novo tipo (listas são disjuntas).
+                      _categoria = _padraoPara(novo);
+                    });
+                  },
                 ),
               if (!_isEdit && d == null) const SizedBox(height: 8),
               if (d != null) ...[
@@ -302,10 +334,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<Category>(
+                key: ValueKey(_tipo),
                 initialValue: _categoria,
                 decoration: const InputDecoration(labelText: 'Categoria'),
                 items: [
-                  for (final c in Category.values)
+                  for (final c in _opcoesCategoria)
                     DropdownMenuItem(value: c, child: Text(c.label)),
                 ],
                 onChanged: (c) => setState(() => _categoria = c!),

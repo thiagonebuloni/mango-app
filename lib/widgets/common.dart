@@ -56,6 +56,20 @@ extension CategoryVisual on Category {
         return Icons.home;
       case Category.outros:
         return Icons.category;
+      case Category.salario:
+        return Icons.work;
+      case Category.investimentos:
+        return Icons.trending_up;
+      case Category.bonificacao:
+        return Icons.card_giftcard;
+      case Category.freelance:
+        return Icons.laptop_mac;
+      case Category.rendaExtra:
+        return Icons.savings;
+      case Category.aluguel:
+        return Icons.key;
+      case Category.pensao:
+        return Icons.family_restroom;
     }
   }
 
@@ -75,6 +89,20 @@ extension CategoryVisual on Category {
         return const Color(0xFF0EA5E9);
       case Category.outros:
         return const Color(0xFF6B7280);
+      case Category.salario:
+        return const Color(0xFF16A34A);
+      case Category.investimentos:
+        return const Color(0xFF0D9488);
+      case Category.bonificacao:
+        return const Color(0xFFCA8A04);
+      case Category.freelance:
+        return const Color(0xFF7C3AED);
+      case Category.rendaExtra:
+        return const Color(0xFF059669);
+      case Category.aluguel:
+        return const Color(0xFF0284C7);
+      case Category.pensao:
+        return const Color(0xFFDB2777);
     }
   }
 }
