@@ -239,14 +239,24 @@ class NewExpenseMenu extends StatelessWidget {
   }
 }
 
+/// Aba da navegação principal em que o menu foi aberto.
+///
+/// Define qual item de navegação o menu exibe: sempre a aba oposta à atual.
+enum AbaPrincipal { gastos, relatorios, inicial }
+
 /// Menu compartilhado do app: tela inicial (botão "Menu") e o ícone de menu
 /// no canto superior direito das telas Gastos e Relatórios.
 ///
-/// [onIrParaRelatorios] troca para a aba de Relatórios; quando é `null`
-/// (tela fora da navegação raiz ou já nela), o item apenas fecha o menu.
+/// Sempre oferece a aba oposta à [abaAtual]: aberto na aba Gastos mostra
+/// "Relatórios" e aberto em Relatórios mostra "Gastos". Na tela inicial
+/// ([AbaPrincipal.inicial]), que contém as duas abas, o menu mostra as duas.
+/// Os callbacks `onIrPara*` são opcional: sem eles (tela fora da navegação
+/// raiz ou já nela) o item apenas fecha o menu.
 void showMenuApp(
   BuildContext context,
   WidgetRef ref, {
+  AbaPrincipal abaAtual = AbaPrincipal.inicial,
+  VoidCallback? onIrParaGastos,
   VoidCallback? onIrParaRelatorios,
 }) {
   showModalBottomSheet<void>(
@@ -259,17 +269,28 @@ void showMenuApp(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.pie_chart_outline),
-              title: const Text('Relatórios'),
-              subtitle: const Text(
-                'Totais por período, categoria e pagamento',
+            if (abaAtual != AbaPrincipal.gastos)
+              ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('Gastos'),
+                subtitle: const Text('Lançamentos de despesas e receitas'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onIrParaGastos?.call();
+                },
               ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                onIrParaRelatorios?.call();
-              },
-            ),
+            if (abaAtual != AbaPrincipal.relatorios)
+              ListTile(
+                leading: const Icon(Icons.pie_chart_outline),
+                title: const Text('Relatórios'),
+                subtitle: const Text(
+                  'Totais por período, categoria e pagamento',
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onIrParaRelatorios?.call();
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.palette_outlined),
               title: const Text('Editar perfil'),

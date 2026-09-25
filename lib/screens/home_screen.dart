@@ -238,6 +238,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () => showMenuApp(
               context,
               ref,
+              abaAtual: AbaPrincipal.gastos,
               onIrParaRelatorios: widget.onVerRelatorios,
             ),
           ),

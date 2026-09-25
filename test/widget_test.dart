@@ -355,7 +355,8 @@ void main() async {
       expect(find.text('Cor de fundo'), findsOneWidget);
       expect(find.text('Começar'), findsOneWidget);
       // A tela inicial (landing) só aparece depois do cadastro.
-      expect(find.text('Meus gastos'), findsNothing);
+      expect(find.text('Gastos'), findsNothing);
+      expect(find.text('Relatórios'), findsNothing);
     });
 
     testWidgets('salvar nome, avatar e cor abre a tela inicial',
@@ -387,7 +388,8 @@ void main() async {
 
       // A tela inicial substituiu o cadastro com o que foi escolhido.
       expect(find.text('Olá, Ana!'), findsOneWidget);
-      expect(find.text('Meus gastos'), findsOneWidget);
+      expect(find.text('Gastos'), findsOneWidget);
+      expect(find.text('Relatórios'), findsOneWidget);
       expect(find.text('Menu'), findsOneWidget);
     });
 
@@ -517,7 +519,8 @@ void main() async {
 
       expect(find.text('🦊'), findsOneWidget);
       expect(find.text('Olá, Ana!'), findsOneWidget);
-      expect(find.text('Meus gastos'), findsOneWidget);
+      expect(find.text('Gastos'), findsOneWidget);
+      expect(find.text('Relatórios'), findsOneWidget);
       expect(find.text('Menu'), findsOneWidget);
 
       final centro = tester.getSize(find.byType(Scaffold)).width / 2;
@@ -526,7 +529,7 @@ void main() async {
       expect(tester.getCenter(find.text('Olá, Ana!')).dx,
           moreOrLessEquals(centro, epsilon: 1));
 
-      for (final label in ['Meus gastos', 'Menu']) {
+      for (final label in ['Gastos', 'Relatórios', 'Menu']) {
         final botao = find.ancestor(
           of: find.text(label),
           matching: find.byWidgetPredicate(
@@ -542,16 +545,29 @@ void main() async {
       }
     });
 
-    testWidgets('"Meus gastos" abre a navegação Gastos/Relatórios',
+    testWidgets('botão "Gastos" abre a navegação Gastos/Relatórios',
         (tester) async {
       await abrirTelaInicial(tester);
 
-      await tester.tap(find.text('Meus gastos'));
+      await tester.tap(find.text('Gastos'));
       await tester.pumpAndSettle();
 
       expect(find.text('Gastos'), findsOneWidget);
       expect(find.text('Relatórios'), findsOneWidget);
       expect(find.textContaining('Nenhum gasto'), findsOneWidget);
+    });
+
+    testWidgets('botão "Relatórios" abre direto os relatórios',
+        (tester) async {
+      await abrirTelaInicial(tester);
+
+      await tester.tap(find.text('Relatórios'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReportsScreen), findsOneWidget);
+      expect(find.text('Gastos'), findsOneWidget); // navegação inferior
+      // Título do AppBar + navegação inferior.
+      expect(find.text('Relatórios'), findsNWidgets(2));
     });
 
     testWidgets('"Menu" abre as opções do app', (tester) async {
@@ -560,7 +576,10 @@ void main() async {
       await tester.tap(find.text('Menu'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Relatórios'), findsOneWidget);
+      // Tela inicial tem as duas abas: cada texto aparece no botão da
+      // landing + no item correspondente do menu.
+      expect(find.text('Gastos'), findsNWidgets(2));
+      expect(find.text('Relatórios'), findsNWidgets(2));
       expect(find.text('Editar perfil'), findsOneWidget);
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Importar em CSV'), findsOneWidget);
@@ -593,6 +612,9 @@ void main() async {
         ),
       );
       await tester.pumpAndSettle();
+      // Aberto em Gastos: o menu oferece apenas a aba oposta (Relatórios).
+      expect(find.text('Relatórios'), findsOneWidget);
+      expect(find.text('Gastos'), findsNothing);
       expect(find.text('Editar perfil'), findsOneWidget);
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Importar em CSV'), findsOneWidget);
@@ -619,6 +641,10 @@ void main() async {
         ),
       );
       await tester.pumpAndSettle();
+      // Aberto em Relatórios: o menu oferece apenas a aba oposta (Gastos).
+      // O "Relatórios" único é o título do AppBar (o item do menu some).
+      expect(find.text('Gastos'), findsOneWidget);
+      expect(find.text('Relatórios'), findsOneWidget);
       expect(find.text('Editar perfil'), findsOneWidget);
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Sobre o Financ'), findsOneWidget);
@@ -734,7 +760,7 @@ void main() async {
 
       // Dentro do app (Gastos) a cor continua valendo — inclusive pintada de
       // verdade pelo Scaffold/AppBar.
-      await tester.tap(find.text('Meus gastos'));
+      await tester.tap(find.text('Gastos'));
       await tester.pumpAndSettle();
 
       final theme =

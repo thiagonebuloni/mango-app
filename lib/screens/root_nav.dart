@@ -51,7 +51,7 @@ class _RootNavState extends State<RootNav> {
         onPageChanged: _onPageChanged,
         children: [
           HomeScreen(onVerRelatorios: () => _onDestinationSelected(1)),
-          const ReportsScreen(),
+          ReportsScreen(onVerGastos: () => _onDestinationSelected(0)),
         ],
       ),
       bottomNavigationBar: NavigationBar(

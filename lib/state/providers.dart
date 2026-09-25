@@ -159,7 +159,13 @@ PeriodSummary summarize(List<Expense> expenses, DateTime now) {
 /// Relatórios: gastos do período em aberto, reativos ao expensesProvider.
 class ExpensesForReports extends AsyncNotifier<List<Expense>> {
   @override
-  Future<List<Expense>> build() => DBHelper.instance.allExpenses();
+  Future<List<Expense>> build() {
+    // Observa os lançamentos: despesa/receita inserida, editada, excluída ou
+    // importada recarrega os relatórios na hora, sem depender de FAB ou
+    // pull-to-refresh (os lançamentos sempre passam pelo expensesProvider).
+    ref.watch(expensesProvider);
+    return DBHelper.instance.allExpenses();
+  }
 }
 
 final expensesForReportsProvider =

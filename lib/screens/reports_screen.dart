@@ -10,7 +10,11 @@ import '../widgets/common.dart';
 
 /// Relatorio por periodo, categoria e forma de pagamento.
 class ReportsScreen extends ConsumerStatefulWidget {
-  const ReportsScreen({super.key});
+  /// Troca para a aba de Gastos (vindo da navegação raiz). `null` quando a
+  /// tela é usada fora dela: o item do menu apenas fecha.
+  final VoidCallback? onVerGastos;
+
+  const ReportsScreen({super.key, this.onVerGastos});
 
   @override
   ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
@@ -77,7 +81,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           IconButton(
             icon: const Icon(Icons.menu),
             tooltip: 'Menu',
-            onPressed: () => showMenuApp(context, ref),
+            onPressed: () => showMenuApp(
+              context,
+              ref,
+              abaAtual: AbaPrincipal.relatorios,
+              onIrParaGastos: widget.onVerGastos,
+            ),
           ),
         ],
       ),
