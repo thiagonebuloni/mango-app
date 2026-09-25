@@ -37,19 +37,21 @@ class DBHelper {
     )
   ''';
 
-  /// Perfil do usuário (nome, avatar e cor de fundo): uma única linha.
+  /// Perfil do usuário (nome, avatar, cor de fundo e tema): uma única linha.
   static const _profileTable = '''
     CREATE TABLE profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       nome TEXT NOT NULL,
       avatar TEXT NOT NULL,
-      cor INTEGER NOT NULL
+      cor INTEGER NOT NULL,
+      tema_claro INTEGER NOT NULL DEFAULT 1
     )
   ''';
 
   /// v1 = gastos + memória de categorias; v2 = perfil do usuário;
-  /// v3 = coluna `tipo` (despesa/receita) em expenses.
-  static const _dbVersion = 3;
+  /// v3 = coluna `tipo` (despesa/receita) em expenses;
+  /// v4 = coluna `tema_claro` (tema claro/escuro) em profile.
+  static const _dbVersion = 4;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -67,6 +69,16 @@ class DBHelper {
         if (oldVersion < 3) {
           await db.execute(
               "ALTER TABLE expenses ADD COLUMN tipo TEXT NOT NULL DEFAULT 'despesa'");
+        }
+        if (oldVersion < 4) {
+          // Perfis já salvos ganham a coluna do tema sem perder os dados:
+          // quem não escolheu nada continua no tema claro.
+          final cols = await db.rawQuery('PRAGMA table_info(profile)');
+          final temTema = cols.any((c) => c['name'] == 'tema_claro');
+          if (!temTema) {
+            await db.execute(
+                'ALTER TABLE profile ADD COLUMN tema_claro INTEGER NOT NULL DEFAULT 1');
+          }
         }
       },
     );

@@ -236,22 +236,32 @@ class UserProfile {
   final String nome;
   final String avatar; // emoticon escolhido (ex.: '🦊')
   final int corFundo; // cor de fundo da tela inicial, em ARGB
+  /// `true` = tema claro; `false` = tema escuro.
+  final bool temaClaro;
 
   const UserProfile({
     required this.nome,
     required this.avatar,
     required this.corFundo,
+    this.temaClaro = true,
   });
 
   /// Valores usados quando o usuário ainda não escolheu nada.
   static const String avatarPadrao = '🐸';
   static const int corFundoPadrao = 0xFFE0F2F1;
+  static const int corFundoEscuroPadrao = 0xFF10201E;
 
-  UserProfile copyWith({String? nome, String? avatar, int? corFundo}) =>
+  UserProfile copyWith({
+    String? nome,
+    String? avatar,
+    int? corFundo,
+    bool? temaClaro,
+  }) =>
       UserProfile(
         nome: nome ?? this.nome,
         avatar: avatar ?? this.avatar,
         corFundo: corFundo ?? this.corFundo,
+        temaClaro: temaClaro ?? this.temaClaro,
       );
 
   Map<String, Object?> toMap() => {
@@ -259,15 +269,22 @@ class UserProfile {
         'nome': nome,
         'avatar': avatar,
         'cor': corFundo,
+        'tema_claro': temaClaro ? 1 : 0,
       };
 
   static UserProfile fromMap(Map<String, Object?> map) => UserProfile(
         nome: (map['nome'] as String?) ?? '',
         avatar: (map['avatar'] as String?) ?? avatarPadrao,
         corFundo: (map['cor'] as int?) ?? corFundoPadrao,
+        temaClaro: switch (map['tema_claro']) {
+          final int v => v != 0,
+          final bool v => v,
+          _ => true, // perfis antigos: continuam no tema claro
+        },
       );
 
   @override
   String toString() =>
-      'UserProfile(nome: $nome, avatar: $avatar, cor: $corFundo)';
+      'UserProfile(nome: $nome, avatar: $avatar, cor: $corFundo, '
+      'temaClaro: $temaClaro)';
 }

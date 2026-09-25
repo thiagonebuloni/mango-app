@@ -3,20 +3,106 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../widgets/common.dart';
 
-/// Cor de fundo do app: a escolhida no perfil ou o padrão antes do cadastro.
-Color corFundoDoPerfil(UserProfile? perfil) =>
-    Color(perfil?.corFundo ?? UserProfile.corFundoPadrao);
+/// Cores de fundo do **tema claro** (claras, para o texto continuar legível).
+const List<Color> kCoresTemaClaro = [
+  Color(0xFFE0F2F1), // verde-água
+  Color(0xFFE3F2FD), // azul
+  Color(0xFFF3E5F5), // lilás
+  Color(0xFFFCE4EC), // rosa
+  Color(0xFFFFF3E0), // pêssego
+  Color(0xFFE8F5E9), // verde
+  Color(0xFFFFFDE7), // amarelo claro
+  Color(0xFFEEEEEE), // cinza
+];
 
-/// Tema do app construído a partir da **cor de fundo escolhida pelo usuário**
-/// no perfil. A cor vale para todo o app: fundo dos Scaffolds, AppBar, barra de
-/// navegação inferior, diálogos e bottom sheets.
+/// Cores de fundo do **tema escuro**: mesmos matizes do tema claro, mas em
+/// tons escuros e saturados. A posição corresponde à do tema claro
+/// (`kCoresTemaEscuro[i]` é o tom escuro de `kCoresTemaClaro[i]`), para que
+/// trocar de tema preserve a cor escolhida pelo usuário.
+const List<Color> kCoresTemaEscuro = [
+  Color(0xFF0E4F4A), // verde-água escuro
+  Color(0xFF1E3A5F), // azul escuro
+  Color(0xFF3B2366), // lilás escuro
+  Color(0xFF6B1E3A), // rosa escuro
+  Color(0xFF7A4A12), // pêssego/âmbar escuro
+  Color(0xFF14532D), // verde escuro
+  Color(0xFF5C4A0E), // amarelo/oliva escuro
+  Color(0xFF33393B), // cinza escuro
+];
+
+/// Tema ativo no perfil (`true` = claro). Perfis antigos/nulos continuam no
+/// tema claro.
+bool temaClaroDoPerfil(UserProfile? perfil) => perfil?.temaClaro ?? true;
+
+/// Índice da [cor] na [paleta], ou `-1` quando ela não é uma das opções.
+int _indiceNaPaleta(Color cor, List<Color> paleta) {
+  for (var i = 0; i < paleta.length; i++) {
+    if (paleta[i].toARGB32() == cor.toARGB32()) return i;
+  }
+  return -1;
+}
+
+/// Cor armazenada no perfil convertida para a [paleta] destino, preservando a
+/// posição (matiz) escolhida. Quando a cor atual não é uma das opções (perfil
+/// antigo/editado à mão), mantém a cor original.
+Color corNaPaleta(Color cor, List<Color> origem, List<Color> destino) {
+  final i = _indiceNaPaleta(cor, origem);
+  if (i < 0) return cor;
+  return destino[i.clamp(0, destino.length - 1)];
+}
+
+/// Fundo escuro derivado da cor escolhida: quase preto, mas com o mesmo matiz
+/// (HSL com luminosidade baixa e saturação preservada).
+Color fundoEscuroDaCor(Color cor) {
+  final hsl = HSLColor.fromColor(cor);
+  return hsl
+      .withLightness(0.11)
+      .withSaturation(hsl.saturation.clamp(0.35, 0.85))
+      .toColor();
+}
+
+/// Cor de fundo efetiva do app: a escolhida no perfil no tema claro; no tema
+/// escuro, um fundo quase preto com o matiz da cor escolhida.
 ///
-/// É aplicado em `MaterialApp.theme` (ver `FinancApp`), então trocar a cor no
-/// perfil repinta todas as telas na hora.
-ThemeData buildAppTheme(Color corFundo) {
+/// Se um perfil antigo (ou editado à mão) combinar tema escuro com uma cor da
+/// paleta clara, converte para o tom escuro correspondente — e vice-versa.
+Color corFundoDoPerfil(UserProfile? perfil) {
+  if (perfil == null) return const Color(UserProfile.corFundoPadrao);
+  final cor = Color(perfil.corFundo);
+  if (perfil.temaClaro) {
+    final i = _indiceNaPaleta(cor, kCoresTemaEscuro);
+    if (i >= 0) return kCoresTemaClaro[i];
+    return cor;
+  }
+  final i = _indiceNaPaleta(cor, kCoresTemaClaro);
+  final escolhida = i >= 0 ? kCoresTemaEscuro[i] : cor;
+  return fundoEscuroDaCor(escolhida);
+}
+
+/// Cor de destaque do tema escuro: a cor escolhida pelo usuário, usada nas
+/// caixas destacadas de Gastos/Relatórios. `null` no tema claro.
+Color? corDestaqueDoPerfil(UserProfile? perfil) {
+  if (perfil == null || perfil.temaClaro) return null;
+  final cor = Color(perfil.corFundo);
+  final i = _indiceNaPaleta(cor, kCoresTemaClaro);
+  if (i >= 0) return kCoresTemaEscuro[i];
+  return cor;
+}
+
+/// Tema do app construído a partir do perfil do usuário (cor de fundo + modo
+/// claro/escuro). A cor vale para todo o app: fundo dos Scaffolds, AppBar,
+/// barra de navegação inferior, diálogos e bottom sheets.
+///
+/// É aplicado em `MaterialApp.theme` (ver `FinancApp`), então trocar a cor ou
+/// o tema no perfil repinta todas as telas na hora.
+ThemeData buildAppTheme(Color corFundo, {bool temaClaro = true}) {
   final base = ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+    brightness: temaClaro ? Brightness.light : Brightness.dark,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: temaClaro ? Colors.teal : corFundo,
+      brightness: temaClaro ? Brightness.light : Brightness.dark,
+    ),
   );
   final onCor = onBackgroundColor(corFundo);
 

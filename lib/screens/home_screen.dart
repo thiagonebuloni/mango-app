@@ -6,6 +6,7 @@ import '../db/db.dart';
 import '../models/models.dart';
 import '../screens/expense_form_screen.dart';
 import '../state/providers.dart';
+import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 
 /// Filtro rápido da lista de gastos pelos cards de resumo.
@@ -227,6 +228,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesProvider);
+    final destaque = corDestaqueDoPerfil(ref.watch(profileProvider).value);
 
     return Scaffold(
       appBar: AppBar(
@@ -312,6 +314,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           value: summary.dia,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.dia,
+                          corDestaque: destaque,
                           onTap: () => _toggleFiltro(_FiltroRapido.dia),
                         ),
                         const SizedBox(width: 8),
@@ -320,6 +323,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           value: summary.semana,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.semana,
+                          corDestaque: destaque,
                           onTap: () => _toggleFiltro(_FiltroRapido.semana),
                         ),
                         const SizedBox(width: 8),
@@ -328,6 +332,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           value: summary.mes,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.mes,
+                          corDestaque: destaque,
                           onTap: () => _toggleFiltro(_FiltroRapido.mes),
                         ),
                       ],
@@ -459,6 +464,7 @@ class _SummaryCard extends StatelessWidget {
   final int value;
   final int flex;
   final bool selected;
+  final Color? corDestaque;
   final VoidCallback onTap;
 
   const _SummaryCard(
@@ -466,15 +472,19 @@ class _SummaryCard extends StatelessWidget {
       required this.value,
       required this.flex,
       required this.selected,
+      this.corDestaque,
       required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final fundoCaixa = corDestaque ??
+        (selected ? scheme.primaryContainer : null);
+    final onCaixa = fundoCaixa == null ? null : onBackgroundColor(fundoCaixa);
     return Expanded(
       flex: flex,
       child: Card(
-        color: selected ? scheme.primaryContainer : null,
+        color: fundoCaixa,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
@@ -487,11 +497,14 @@ class _SummaryCard extends StatelessWidget {
                   children: [
                     Text(label,
                         style: TextStyle(
-                            fontSize: 12, color: scheme.onSurfaceVariant)),
+                            fontSize: 12,
+                            color:
+                                onCaixa ?? scheme.onSurfaceVariant)),
                     if (selected) ...[
                       const SizedBox(width: 4),
                       Icon(Icons.check_circle,
-                          size: 14, color: scheme.primary),
+                          size: 14,
+                          color: onCaixa ?? scheme.primary),
                     ],
                   ],
                 ),
@@ -499,8 +512,10 @@ class _SummaryCard extends StatelessWidget {
                 FittedBox(
                   child: Text(
                     formatBRL(value),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: onCaixa),
                   ),
                 ),
               ],

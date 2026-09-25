@@ -40,7 +40,10 @@ class FinancApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Financ',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(corFundoDoPerfil(perfil)),
+      theme: buildAppTheme(
+        corFundoDoPerfil(perfil),
+        temaClaro: temaClaroDoPerfil(perfil),
+      ),
       home: const ProfileGate(),
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],

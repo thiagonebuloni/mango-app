@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../db/db.dart';
 import '../models/models.dart';
 import '../state/providers.dart';
+import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 
 /// Relatorio por periodo, categoria e forma de pagamento.
@@ -73,6 +74,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesForReportsProvider);
+    final destaque = corDestaqueDoPerfil(ref.watch(profileProvider).value);
 
     return Scaffold(
       appBar: AppBar(
@@ -149,18 +151,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         }
                       },
                       borderRadius: const BorderRadius.all(Radius.circular(8)),
-                      selectedColor: Colors.white,
-                      fillColor: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.2),
-                      splashColor: Theme.of(context)
-                          .colorScheme
-                          .primary
+                      selectedColor: destaque == null
+                          ? Colors.white
+                          : onBackgroundColor(destaque),
+                      fillColor: destaque ??
+                          Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.2),
+                      splashColor: (destaque ??
+                              Theme.of(context).colorScheme.primary)
                           .withValues(alpha: 0.4),
-                      hoverColor: Theme.of(context)
-                          .colorScheme
-                          .primary
+                      hoverColor: (destaque ??
+                              Theme.of(context).colorScheme.primary)
                           .withValues(alpha: 0.15),
                       children: const [
                         Padding(
@@ -204,16 +207,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     child: Center(child: Text('Sem gastos no periodo.')),
                   )
                 else
-                  _DaySummaryCard(dayMap: byDay, expenses: inPeriod),
+                  _DaySummaryCard(
+                    dayMap: byDay,
+                    expenses: inPeriod,
+                    corDestaque: destaque,
+                  ),
                 const SizedBox(height: 16),
                 if (byCategory.isEmpty && byPayment.isEmpty)
                   const Center(child: Text('Sem dados para visualização.'))
                 else ...[
                   if (byCategory.isNotEmpty)
-                    _CategoryCard(data: byCategory),
+                    _CategoryCard(
+                      data: byCategory,
+                      corDestaque: destaque,
+                    ),
                   const SizedBox(height: 16),
                   if (byPayment.isNotEmpty)
-                    _PaymentCard(data: byPayment, expenses: inPeriod),
+                    _PaymentCard(
+                      data: byPayment,
+                      expenses: inPeriod,
+                      corDestaque: destaque,
+                    ),
                 ],
               ],
             ),
@@ -227,8 +241,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 class _DaySummaryCard extends StatelessWidget {
   final Map<DateTime, int> dayMap;
   final List<Expense> expenses;
+  final Color? corDestaque;
 
-  const _DaySummaryCard({required this.dayMap, required this.expenses});
+  const _DaySummaryCard({
+    required this.dayMap,
+    required this.expenses,
+    this.corDestaque,
+  });
 
   List<Expense> _expensesOfDay(DateTime day) {
     final list = expenses.where((e) {
@@ -246,13 +265,19 @@ class _DaySummaryCard extends StatelessWidget {
     final df = DateFormat('EEE, dd/MM', 'pt_BR');
 
     return Card(
+      color: corDestaque,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Text('Gastos por dia',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: corDestaque == null
+                        ? null
+                        : onBackgroundColor(corDestaque!))),
           ),
           ...days.map((day) {
             final dayExpenses = _expensesOfDay(day);
@@ -288,13 +313,15 @@ class _DaySummaryCard extends StatelessWidget {
 
 class _CategoryCard extends StatelessWidget {
   final Map<Category, int> data;
+  final Color? corDestaque;
 
-  const _CategoryCard({required this.data});
+  const _CategoryCard({required this.data, this.corDestaque});
 
   @override
   Widget build(BuildContext context) {
     final total = data.values.fold<int>(0, (a, b) => a + b);
     return Card(
+      color: corDestaque,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -355,8 +382,13 @@ class _CategoryCard extends StatelessWidget {
 class _PaymentCard extends StatelessWidget {
   final Map<PaymentMethod, int> data;
   final List<Expense> expenses;
+  final Color? corDestaque;
 
-  const _PaymentCard({required this.data, required this.expenses});
+  const _PaymentCard({
+    required this.data,
+    required this.expenses,
+    this.corDestaque,
+  });
 
   List<Expense> _expensesOf(PaymentMethod forma) {
     final list = expenses.where((e) => e.forma == forma).toList()
@@ -374,13 +406,19 @@ class _PaymentCard extends StatelessWidget {
       PaymentMethod.outros: Icons.more_horiz,
     };
     return Card(
+      color: corDestaque,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Text('Por forma de pagamento',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: corDestaque == null
+                        ? null
+                        : onBackgroundColor(corDestaque!))),
           ),
           for (final entry in data.entries)
             ExpansionTile(

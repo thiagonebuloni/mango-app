@@ -18,6 +18,7 @@ import 'package:financ/screens/landing_screen.dart';
 import 'package:financ/screens/profile_setup_screen.dart';
 import 'package:financ/screens/reports_screen.dart';
 import 'package:financ/state/providers.dart';
+import 'package:financ/theme/app_theme.dart';
 import 'package:financ/widgets/common.dart';
 
 /// Perfil já cadastrado (casos de "demais aberturas" do app).
@@ -831,6 +832,113 @@ void main() async {
             .scaffoldBackgroundColor,
         kProfileColors[2],
       );
+    });
+
+    testWidgets('fundo escuro preserva o matiz da cor escolhida',
+        (tester) async {
+      const claro = Color(0xFFE3F2FD); // azul claro da paleta
+      const escuro = Color(0xFF1E3A5F); // azul escuro correspondente
+      final fundo = corFundoDoPerfil(
+        const UserProfile(
+          nome: 'Ana',
+          avatar: '🦊',
+          corFundo: 0xFFE3F2FD,
+          temaClaro: false,
+        ),
+      );
+      final matizClaro = HSLColor.fromColor(claro).hue;
+      final matizFundo = HSLColor.fromColor(fundo).hue;
+      final delta = (matizClaro - matizFundo).abs();
+      final distancia = delta > 180 ? 360 - delta : delta;
+      expect(fundo.toARGB32() == claro.toARGB32(), isFalse);
+      expect(HSLColor.fromColor(fundo).lightness, lessThan(0.2));
+      expect(distancia, lessThan(12));
+      expect(corDestaqueDoPerfil(_perfilTeste), isNull);
+      expect(
+        corDestaqueDoPerfil(
+          const UserProfile(
+            nome: 'Ana',
+            avatar: '🦊',
+            corFundo: 0xFFE3F2FD,
+            temaClaro: false,
+          ),
+        ),
+        escuro,
+      );
+    });
+
+    testWidgets('tema escuro usa brilho escuro e destaque nas caixas',
+        (tester) async {
+      const perfilEscuro = UserProfile(
+        nome: 'Ana',
+        avatar: '🦊',
+        corFundo: 0xFF1E3A5F,
+        temaClaro: false,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider
+                .overrideWith(() => _FakeProfileNotifier(perfilEscuro)),
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: const FinancApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final theme =
+          tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!;
+      expect(theme.brightness, Brightness.dark);
+      expect(
+        theme.scaffoldBackgroundColor,
+        corFundoDoPerfil(perfilEscuro),
+      );
+      expect(corDestaqueDoPerfil(perfilEscuro), kCoresTemaEscuro[1]);
+    });
+
+    testWidgets('editar perfil tem rolagem e troca a paleta com o tema',
+        (tester) async {
+      final notifier = _FakeProfileNotifier(_perfilTeste);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [profileProvider.overrideWith(() => notifier)],
+          child: _makeApp(home: ProfileSetupScreen(existing: _perfilTeste)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tema claro'), findsOneWidget);
+      expect(find.text('Tema escuro'), findsOneWidget);
+      expect(find.byType(Scrollbar), findsOneWidget);
+      expect(
+        tester
+            .widget<ColorChoice>(find.byKey(const ValueKey('cor-1')))
+            .color,
+        kCoresTemaClaro[1],
+      );
+
+      await tester.ensureVisible(find.text('Tema escuro'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tema escuro'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<ColorChoice>(find.byKey(const ValueKey('cor-1')))
+            .color,
+        kCoresTemaEscuro[1],
+      );
+
+      await tester.ensureVisible(find.text('Salvar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.salvo?.temaClaro, isFalse);
+      expect(notifier.salvo?.corFundo, kCoresTemaEscuro[1].toARGB32());
     });
   });
 }

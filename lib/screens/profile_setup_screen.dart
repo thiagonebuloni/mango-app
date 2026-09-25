@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
 import '../state/providers.dart';
+import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 
 /// Avatares (emoticons) oferecidos no cadastro do perfil.
@@ -13,17 +14,16 @@ const List<String> kProfileAvatars = [
   '🌟', '🍀', '🚀', '🎯',
 ];
 
-/// Cores de fundo (claras, para o texto continuar legível) da tela inicial.
-const List<Color> kProfileColors = [
-  Color(0xFFE0F2F1), // verde-água
-  Color(0xFFE3F2FD), // azul
-  Color(0xFFF3E5F5), // lilás
-  Color(0xFFFCE4EC), // rosa
-  Color(0xFFFFF3E0), // pêssego
-  Color(0xFFE8F5E9), // verde
-  Color(0xFFFFFDE7), // amarelo claro
-  Color(0xFFEEEEEE), // cinza
-];
+/// Cores de fundo da tela inicial.
+///
+/// Mantido para compatibilidade com os testes existentes: a paleta ativa do
+/// perfil agora vem de [kCoresTemaClaro]/[kCoresTemaEscuro] (ver
+/// `lib/theme/app_theme.dart`).
+const List<Color> kProfileColors = kCoresTemaClaro;
+
+/// Cores escuras de fundo, com os mesmos matizes da paleta clara, oferecidas
+/// quando o usuário escolhe o tema escuro.
+const List<Color> kProfileColorsEscuro = kCoresTemaEscuro;
 
 /// Cadastro do usuário no primeiro acesso (nome, avatar e cor de fundo) e
 /// edição do perfil depois (`existing` != null).
@@ -43,15 +43,18 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
 
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
   late final TextEditingController _nome;
   late String _avatar;
   late Color _cor;
+  late bool _temaClaro;
 
   /// Valores ao abrir a tela: base para saber se houve alteração (só na
   /// edição vale pedir confirmação ao sair).
   late String _nomeInicial;
   late String _avatarInicial;
   late Color _corInicial;
+  late bool _temaClaroInicial;
 
   bool _saving = false;
 
@@ -60,10 +63,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   bool get _temAlteracoes =>
       _nome.text.trim() != _nomeInicial ||
       _avatar != _avatarInicial ||
-      _cor != _corInicial;
+      _cor != _corInicial ||
+      _temaClaro != _temaClaroInicial;
 
   /// Na edição, sair com alterações não salvas pede confirmação.
   bool get _bloqueiaSaida => _isEdit && _temAlteracoes;
+
+  /// Paleta de cores oferecida: alterna com o tema escolhido.
+  List<Color> get _paletaCores =>
+      _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
 
   @override
   void initState() {
@@ -71,10 +79,23 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final perfil = widget.existing;
     _nome = TextEditingController(text: perfil?.nome ?? '');
     _avatar = perfil?.avatar ?? kProfileAvatars.first;
-    _cor = Color(perfil?.corFundo ?? UserProfile.corFundoPadrao);
+    _temaClaro = perfil?.temaClaro ?? true;
+    _cor = Color(
+      perfil?.corFundo ??
+          (_temaClaro
+              ? UserProfile.corFundoPadrao
+              : UserProfile.corFundoEscuroPadrao),
+    );
+    // Garante que a cor inicial pertence à paleta do tema atual.
+    final paleta = _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
+    if (!paleta.any((c) => c.toARGB32() == _cor.toARGB32())) {
+      final origem = _temaClaro ? kCoresTemaEscuro : kCoresTemaClaro;
+      _cor = corNaPaleta(_cor, origem, paleta);
+    }
     _nomeInicial = _nome.text.trim();
     _avatarInicial = _avatar;
     _corInicial = _cor;
+    _temaClaroInicial = _temaClaro;
     // Digitar muda o perfil: mantém o PopScope (canPop) em sincronia.
     if (_isEdit) _nome.addListener(_onNomeChanged);
   }
@@ -87,6 +108,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   void dispose() {
     _nome.removeListener(_onNomeChanged);
     _nome.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -99,6 +121,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             nome: _nome.text.trim(),
             avatar: _avatar,
             corFundo: _cor.toARGB32(),
+            temaClaro: _temaClaro,
           ),
         );
     if (!mounted) return;
@@ -108,6 +131,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       _nomeInicial = _nome.text.trim();
       _avatarInicial = _avatar;
       _corInicial = _cor;
+      _temaClaroInicial = _temaClaro;
     });
 
     // No primeiro acesso esta tela é a raiz do app (nada a fechar). Na edição
@@ -167,7 +191,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final onCor = onBackgroundColor(_cor);
+    final fundoPrevia = _temaClaro ? _cor : fundoEscuroDaCor(_cor);
+    final onCor = onBackgroundColor(fundoPrevia);
 
     return PopScope<Object?>(
       // Na edição, sair com alterações não salvas pede confirmação; sem
@@ -178,7 +203,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         await _confirmarSaida();
       },
       child: Scaffold(
-        backgroundColor: _cor,
+        backgroundColor: fundoPrevia,
         appBar: _isEdit
             ? AppBar(
                 title: const Text('Editar perfil'),
@@ -188,9 +213,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             : null,
         body: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
+            child: Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: Form(
                   key: _formKey,
@@ -203,11 +232,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                       const SizedBox(height: 20),
                       _escolhaAvatar(onCor),
                       const SizedBox(height: 20),
+                      _escolhaTema(onCor),
+                      const SizedBox(height: 20),
                       _escolhaCor(onCor),
                       const SizedBox(height: 28),
                       _botaoSalvar(),
                     ],
                   ),
+                ),
                 ),
               ),
             ),
@@ -305,6 +337,39 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         ],
       );
 
+  Widget _escolhaTema(Color onCor) => Column(
+        children: [
+          Text('Tema',
+              style: TextStyle(fontWeight: FontWeight.bold, color: onCor)),
+          const SizedBox(height: 12),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: true,
+                icon: Icon(Icons.light_mode_outlined),
+                label: Text('Tema claro'),
+              ),
+              ButtonSegment(
+                value: false,
+                icon: Icon(Icons.dark_mode_outlined),
+                label: Text('Tema escuro'),
+              ),
+            ],
+            selected: {_temaClaro},
+            onSelectionChanged: (selecao) {
+              final tema = selecao.first;
+              if (tema == _temaClaro) return;
+              setState(() {
+                _temaClaro = tema;
+                final paleta = _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
+                final origem = _temaClaro ? kCoresTemaEscuro : kCoresTemaClaro;
+                _cor = corNaPaleta(_cor, origem, paleta);
+              });
+            },
+          ),
+        ],
+      );
+
   Widget _escolhaCor(Color onCor) => Column(
         children: [
           Text('Cor de fundo',
@@ -315,13 +380,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             spacing: 12,
             runSpacing: 12,
             children: [
-              for (var i = 0; i < kProfileColors.length; i++)
-                _ColorChoice(
+              for (var i = 0; i < _paletaCores.length; i++)
+                ColorChoice(
                   key: ValueKey('cor-$i'),
-                  color: kProfileColors[i],
-                  selected: kProfileColors[i] == _cor,
+                  color: _paletaCores[i],
+                  selected: _paletaCores[i] == _cor,
                   onCor: onCor,
-                  onTap: () => setState(() => _cor = kProfileColors[i]),
+                  onTap: () => setState(() => _cor = _paletaCores[i]),
                 ),
             ],
           ),
@@ -385,13 +450,15 @@ class _AvatarChoice extends StatelessWidget {
 }
 
 /// Bolinha de cor de fundo, marcada quando é a cor escolhida.
-class _ColorChoice extends StatelessWidget {
+///
+/// Pública para os testes verificarem a paleta ativa por tema.
+class ColorChoice extends StatelessWidget {
   final Color color;
   final bool selected;
   final Color onCor;
   final VoidCallback onTap;
 
-  const _ColorChoice({
+  const ColorChoice({
     super.key,
     required this.color,
     required this.selected,
