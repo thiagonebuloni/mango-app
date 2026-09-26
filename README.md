@@ -20,16 +20,21 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 - **Confirmação humana:** o app nunca grava direto da foto — o formulário abre
   pré-preenchido para você conferir com 1 toque.
 - **Dados 100% locais** (SQLite via sqflite). Sem servidor, sem backend.
-- **Perfil e tela inicial:** nome, avatar (emoticon) e cor de fundo escolhidos
-  no primeiro acesso (`lib/screens/profile_setup_screen.dart`); a tela inicial
+- **Perfil e tela inicial:** nome, avatar (emoticon ou foto com recorte) e
+  cor de fundo escolhidos no primeiro acesso
+  (`lib/screens/profile_setup_screen.dart`); a tela inicial
   (`lib/screens/landing_screen.dart`) mostra avatar + nome e os botões
 - **Foto do cupom:** limite de 8 MB — imagens maiores (em geral vindas da
   galeria) são recusadas **antes** de decodificar/rodar o OCR, pois decodificar
   aloca muito mais memória e pode travar o app em aparelhos simples.
-- **Avatar:** atalhos com os emoticons mais usados **e** a grade de emojis do
-  app — que já abre direto com todos (busca, categorias e recentes), sem
-  depender do teclado do aparelho. O avatar guarda o primeiro emoticon
-  (funciona com compostos como 👨‍👩‍👧).
+- **Avatar:** tocar no avatar abre o menu — **emoticon** (atalhos mais usados
+  **e** a grade de emojis do app, que já abre direto com todos: busca,
+  categorias e recentes, sem depender do teclado do aparelho; guarda o
+  primeiro emoticon, funcionando com compostos como 👨‍👩‍👧) ou **foto**
+  (galeria/câmera, `lib/widgets/avatar.dart`). A foto tem limite de 5 MB
+  (recusada antes de decodificar, como o cupom), é copiada para os documentos
+  do app e tem edição simples: arrastar posiciona o recorte e o slider dá
+  zoom (posição + zoom salvos no perfil, SQLite v5).
 - **Fallback IA (opcional):** `lib/services/ai_fallback.dart` documenta o ponto
   de extensão para Gemini Flash (camada gratuita), enviando só o texto do OCR.
 

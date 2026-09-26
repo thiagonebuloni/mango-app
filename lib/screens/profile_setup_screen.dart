@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/models.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
+import '../widgets/avatar.dart';
 import '../widgets/common.dart';
 
 /// Avatares (emoticons) oferecidos no cadastro do perfil.
@@ -60,6 +64,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   late String _avatar;
   late Color _cor;
   late bool _temaClaro;
+  /// Caminho da foto do avatar (cópia nos documentos do app). `null` = emoticon.
+  String? _fotoPath;
+  /// Posição do recorte (-1..1) e zoom (1..3) da foto.
+  late double _fotoAlignX;
+  late double _fotoAlignY;
+  late double _fotoZoom;
+  /// Foto nova escolhida nesta sessão mas ainda não salva: se o usuário sair
+  /// sem salvar, o arquivo órfão é apagado.
+  String? _fotoPendente;
 
   /// Valores ao abrir a tela: base para saber se houve alteração (só na
   /// edição vale pedir confirmação ao sair).
@@ -67,14 +80,23 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   late String _avatarInicial;
   late Color _corInicial;
   late bool _temaClaroInicial;
+  String? _fotoPathInicial;
+  late double _fotoAlignXInicial;
+  late double _fotoAlignYInicial;
+  late double _fotoZoomInicial;
 
   bool _saving = false;
+  bool _escolhendoFoto = false;
 
   bool get _isEdit => widget.existing != null;
 
   bool get _temAlteracoes =>
       _nome.text.trim() != _nomeInicial ||
       _avatar != _avatarInicial ||
+      _fotoPath != _fotoPathInicial ||
+      _fotoAlignX != _fotoAlignXInicial ||
+      _fotoAlignY != _fotoAlignYInicial ||
+      _fotoZoom != _fotoZoomInicial ||
       _cor != _corInicial ||
       _temaClaro != _temaClaroInicial;
 
@@ -91,6 +113,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final perfil = widget.existing;
     _nome = TextEditingController(text: perfil?.nome ?? '');
     _avatar = perfil?.avatar ?? kProfileAvatars.first;
+    _fotoPath = perfil?.avatarImagePath;
+    _fotoAlignX = (perfil?.avatarAlignX ?? 0).clamp(-1.0, 1.0);
+    _fotoAlignY = (perfil?.avatarAlignY ?? 0).clamp(-1.0, 1.0);
+    _fotoZoom = (perfil?.avatarZoom ?? 1).clamp(1.0, 3.0);
     _temaClaro = perfil?.temaClaro ?? true;
     _cor = Color(
       perfil?.corFundo ??
@@ -108,6 +134,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _avatarInicial = _avatar;
     _corInicial = _cor;
     _temaClaroInicial = _temaClaro;
+    _fotoPathInicial = _fotoPath;
+    _fotoAlignXInicial = _fotoAlignX;
+    _fotoAlignYInicial = _fotoAlignY;
+    _fotoZoomInicial = _fotoZoom;
     // Digitar muda o perfil: mantém o PopScope (canPop) em sincronia.
     if (_isEdit) _nome.addListener(_onNomeChanged);
   }
@@ -121,12 +151,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _nome.removeListener(_onNomeChanged);
     _nome.dispose();
     _scrollController.dispose();
+    // Saiu sem salvar: apaga a cópia nova para não deixar foto órfã.
+    if (_fotoPendente != null && _fotoPendente != _fotoPathInicial) {
+      apagarArquivoAvatar(_fotoPendente);
+    }
     super.dispose();
   }
 
   Future<void> _salvar() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     setState(() => _saving = true);
     await ref
         .read(profileProvider.notifier)
@@ -136,23 +171,38 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             avatar: _avatar,
             corFundo: _cor.toARGB32(),
             temaClaro: _temaClaro,
+            avatarImagePath: _fotoPath,
+            avatarAlignX: _fotoAlignX,
+            avatarAlignY: _fotoAlignY,
+            avatarZoom: _fotoZoom,
           ),
         );
     if (!mounted) return;
+    // A foto pendente virou definitiva: não apagar no dispose.
+    final fotoAntiga = _fotoPathInicial;
     setState(() {
       _saving = false;
+      _fotoPendente = null;
       // O que está na tela agora é o perfil salvo: nada mais pendente.
       _nomeInicial = _nome.text.trim();
       _avatarInicial = _avatar;
       _corInicial = _cor;
       _temaClaroInicial = _temaClaro;
+      _fotoPathInicial = _fotoPath;
+      _fotoAlignXInicial = _fotoAlignX;
+      _fotoAlignYInicial = _fotoAlignY;
+      _fotoZoomInicial = _fotoZoom;
     });
+    // Trocou/removeu a foto: apaga o arquivo antigo (best-effort).
+    if (fotoAntiga != null && fotoAntiga != _fotoPath) {
+      await apagarArquivoAvatar(fotoAntiga);
+    }
 
     // No primeiro acesso esta tela é a raiz do app (nada a fechar). Na edição
     // ela foi empilhada pelo Menu: volta e avisa o usuário.
+    // (messenger/navigator capturados antes dos awaits acima.)
     if (_isEdit) {
-      final messenger = ScaffoldMessenger.of(context);
-      Navigator.of(context).pop();
+      navigator.pop();
       messenger.showSnackBar(
         const SnackBar(content: Text('Perfil atualizado')),
       );
@@ -186,6 +236,73 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if ((descartar ?? false) && mounted) navigator.pop();
   }
 
+  /// Toque no avatar: abre o menu (emoticon da grade interna ou foto).
+  Future<void> _menuAvatar() async {
+    final opcao = await showModalBottomSheet<_OpcaoAvatar>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: const Text('Escolher emoticon'),
+              subtitle: const Text('Grade com todos os emojis'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_OpcaoAvatar.emoji),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Foto da galeria'),
+              subtitle: const Text('Imagem de até 5 MB'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_OpcaoAvatar.galeria),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tirar foto'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_OpcaoAvatar.camera),
+            ),
+            if (_fotoPath != null) ...[
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.crop_outlined),
+                title: const Text('Ajustar posição e recorte'),
+                subtitle: const Text('Arrastar para posicionar, zoom abaixo'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_OpcaoAvatar.ajustar),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    color: Colors.redAccent),
+                title: const Text('Remover foto'),
+                subtitle: const Text('Voltar a usar o emoticon'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_OpcaoAvatar.remover),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    if (opcao == null || !mounted) return;
+    switch (opcao) {
+      case _OpcaoAvatar.emoji:
+        await _escolherEmojiDaGrade();
+      case _OpcaoAvatar.galeria:
+        await _escolherFoto(ImageSource.gallery);
+      case _OpcaoAvatar.camera:
+        await _escolherFoto(ImageSource.camera);
+      case _OpcaoAvatar.ajustar:
+        await _ajustarFoto();
+      case _OpcaoAvatar.remover:
+        _removerFoto();
+    }
+  }
+
   /// Abre o seletor de emoticons (teclado de emojis do app, que já abre direto
   /// na grade de emojis com busca, categorias e recentes — acesso a todos os
   /// emojis, sem depender do teclado do aparelho).
@@ -203,6 +320,105 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     setState(() => _avatar = escolhido.characters.first);
   }
 
+  /// Escolhe a foto (galeria/câmera), valida o tamanho e abre o ajuste
+  /// (posicionamento + recorte).
+  Future<void> _escolherFoto(ImageSource origem) async {
+    if (_escolhendoFoto) return;
+    setState(() => _escolhendoFoto = true);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: origem,
+        // Reduz na origem: avatar circular pequeno não precisa de 12 MP.
+        maxWidth: kAvatarMaxWidth,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+      // Recusa antes de decodificar (mesma proteção do cupom fiscal).
+      final tamanho = await File(picked.path).length();
+      final erro = validarTamanhoAvatar(tamanho);
+      if (!mounted) return;
+      if (erro != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(erro)));
+        return;
+      }
+      final copia = await salvarCopiaAvatar(picked);
+      if (!mounted) return;
+      final anterior = _fotoPath;
+      setState(() {
+        _fotoPath = copia;
+        _fotoPendente = copia;
+        _fotoAlignX = 0;
+        _fotoAlignY = 0;
+        _fotoZoom = 1;
+      });
+      // Foto antiga desta sessão vira órfã: apaga (best-effort).
+      if (anterior != null &&
+          anterior != _fotoPathInicial &&
+          anterior != copia) {
+        await apagarArquivoAvatar(anterior);
+      }
+      await _ajustarFoto();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível usar a imagem: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _escolhendoFoto = false);
+    }
+  }
+
+  /// Editor simples da foto: arrastar posiciona, o slider dá zoom — a prévia
+  /// circular mostra exatamente o recorte que será salvo.
+  Future<void> _ajustarFoto() async {
+    final foto = _fotoPath;
+    if (foto == null || !mounted) return;
+    final resultado = await showModalBottomSheet<_AjusteFoto>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AjusteFotoSheet(
+        imagePath: foto,
+        alignX: _fotoAlignX,
+        alignY: _fotoAlignY,
+        zoom: _fotoZoom,
+        avatarFallback: _avatar,
+      ),
+    );
+    if (resultado == null || !mounted) return;
+    setState(() {
+      _fotoAlignX = resultado.alignX;
+      _fotoAlignY = resultado.alignY;
+      _fotoZoom = resultado.zoom;
+    });
+  }
+
+  void _removerFoto() {
+    final atual = _fotoPath;
+    setState(() => _fotoPath = null);
+    // Apaga já a cópia nova desta sessão; a salva só sai do disco ao Salvar.
+    if (atual != null &&
+        atual != _fotoPathInicial &&
+        atual == _fotoPendente) {
+      _fotoPendente = null;
+      apagarArquivoAvatar(atual);
+    }
+  }
+
+  /// Perfil da prévia (fundo + avatar), incluindo foto e recorte atuais.
+  UserProfile _perfilPrevia() => UserProfile(
+        nome: _nome.text.trim(),
+        avatar: _avatar,
+        corFundo: _cor.toARGB32(),
+        temaClaro: _temaClaro,
+        avatarImagePath: _fotoPath,
+        avatarAlignX: _fotoAlignX,
+        avatarAlignY: _fotoAlignY,
+        avatarZoom: _fotoZoom,
+      );
+
   @override
   Widget build(BuildContext context) {
     // Prévia do fundo: cor escolhida no tema claro; cinza escuro fixo no
@@ -213,12 +429,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     // envolve a tela, para que os highlights (SegmentedButton de tema,
     // seleção de avatar/cor, botões e barra de rolagem) usem a cor do tema
     // escolhido antes de salvar — igual ao restante do app via buildAppTheme.
-    final previaPerfil = UserProfile(
-      nome: _nome.text.trim(),
-      avatar: _avatar,
-      corFundo: _cor.toARGB32(),
-      temaClaro: _temaClaro,
-    );
+    final previaPerfil = _perfilPrevia();
     final previaTheme = buildAppTheme(
       corFundoDoPerfil(previaPerfil),
       temaClaro: temaClaroDoPerfil(previaPerfil),
@@ -307,18 +518,53 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   Widget _previewAvatar(Color onCor) => Padding(
     padding: const EdgeInsets.only(top: 24),
-    child: Tooltip(
-      message: 'Toque para escolher outro emoji',
-      child: InkWell(
-        key: const ValueKey('avatar-preview'),
-        onTap: _escolherEmojiDaGrade,
-        customBorder: const CircleBorder(),
-        child: CircleAvatar(
-          radius: 48,
-          backgroundColor: onCor.withValues(alpha: 0.08),
-          child: Text(_avatar, style: const TextStyle(fontSize: 48)),
+    child: Column(
+      children: [
+        Tooltip(
+          message: 'Toque para trocar o avatar',
+          child: InkWell(
+            key: const ValueKey('avatar-preview'),
+            onTap: _menuAvatar,
+            customBorder: const CircleBorder(),
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                ProfileAvatar(
+                  perfil: _perfilPrevia(),
+                  radius: 48,
+                  fontSize: 48,
+                  backgroundColor: onCor.withValues(alpha: 0.08),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  child: Icon(
+                    _escolhendoFoto
+                        ? Icons.hourglass_top
+                        : Icons.photo_camera_outlined,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          _fotoPath == null
+              ? 'Toque na foto para trocar o avatar'
+              : 'Foto: arraste na edição para posicionar',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: onCor.withValues(alpha: 0.7),
+          ),
+        ),
+      ],
     ),
   );
 
@@ -379,20 +625,34 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           for (final avatar in kProfileAvatars)
             _AvatarChoice(
               avatar: avatar,
-              selected: avatar == _avatar,
+              selected: _fotoPath == null && avatar == _avatar,
               onCor: onCor,
               onTap: () => setState(() => _avatar = avatar),
             ),
         ],
       ),
+      // Emoticon de fundo: mesmo com foto, ele aparece se a imagem falhar.
       // Os atalhos acima são só os mais usados: aqui abre a grade de emojis
       // do app (categorias + busca + recentes) para escolher qualquer um.
       Padding(
         padding: const EdgeInsets.only(top: 4),
-        child: TextButton.icon(
-          onPressed: _escolherEmojiDaGrade,
-          icon: const Icon(Icons.emoji_emotions_outlined),
-          label: const Text('Outro emoji'),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              onPressed: _escolherEmojiDaGrade,
+              icon: const Icon(Icons.emoji_emotions_outlined),
+              label: const Text('Outro emoji'),
+            ),
+            TextButton.icon(
+              onPressed: _menuAvatar,
+              icon: const Icon(Icons.image_outlined),
+              label: Text(
+                _fotoPath == null ? 'Usar foto' : 'Trocar foto',
+              ),
+            ),
+          ],
         ),
       ),
     ],
@@ -472,6 +732,152 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       label: Text(_isEdit ? 'Salvar' : 'Começar'),
     ),
   );
+}
+
+/// Opções do menu aberto ao tocar no avatar.
+enum _OpcaoAvatar { emoji, galeria, camera, ajustar, remover }
+
+/// Posição + zoom escolhidos no editor de foto.
+class _AjusteFoto {
+  final double alignX;
+  final double alignY;
+  final double zoom;
+
+  const _AjusteFoto(this.alignX, this.alignY, this.zoom);
+}
+
+/// Editor simples da foto do avatar: arrastar posiciona o recorte, o slider
+/// controla o zoom. A prévia circular mostra exatamente como ficará salvo
+/// (mesmo enquadramento do [ProfileAvatar]).
+class _AjusteFotoSheet extends StatefulWidget {
+  final String imagePath;
+  final double alignX;
+  final double alignY;
+  final double zoom;
+  final String avatarFallback;
+
+  const _AjusteFotoSheet({
+    required this.imagePath,
+    required this.alignX,
+    required this.alignY,
+    required this.zoom,
+    required this.avatarFallback,
+  });
+
+  @override
+  State<_AjusteFotoSheet> createState() => _AjusteFotoSheetState();
+}
+
+class _AjusteFotoSheetState extends State<_AjusteFotoSheet> {
+  late double _ax = widget.alignX.clamp(-1.0, 1.0);
+  late double _ay = widget.alignY.clamp(-1.0, 1.0);
+  late double _zoom = widget.zoom.clamp(1.0, 3.0);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+              child: Text(
+                'Ajustar foto',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'Arraste a foto para posicionar o recorte.',
+                style: theme.textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              // Arrastar move o recorte (pan / delta normalizado p/ -1..1).
+              onPanUpdate: (d) => setState(() {
+                _ax = (_ax + d.delta.dx / 80).clamp(-1.0, 1.0);
+                _ay = (_ay + d.delta.dy / 80).clamp(-1.0, 1.0);
+              }),
+              child: CircleAvatar(
+                radius: 110,
+                backgroundColor:
+                    theme.colorScheme.primary.withValues(alpha: 0.08),
+                child: ClipOval(
+                  child: SizedBox(
+                    width: 220,
+                    height: 220,
+                    child: Transform.scale(
+                      scale: _zoom,
+                      child: Image.file(
+                        File(widget.imagePath),
+                        fit: BoxFit.cover,
+                        alignment: Alignment(_ax, _ay),
+                        errorBuilder: (_, _, _) => Text(
+                          widget.avatarFallback,
+                          style: const TextStyle(fontSize: 72),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.zoom_out_outlined),
+                  Expanded(
+                    child: Slider(
+                      value: _zoom,
+                      min: 1,
+                      max: 3,
+                      divisions: 20,
+                      label: '${(_zoom * 100).round()}%',
+                      onChanged: (v) => setState(() => _zoom = v),
+                    ),
+                  ),
+                  const Icon(Icons.zoom_in_outlined),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(
+                        _AjusteFoto(_ax, _ay, _zoom),
+                      ),
+                      child: const Text('Aplicar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Bolinha com um emoticon, marcada quando é o avatar escolhido.

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/models.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
+import '../widgets/avatar.dart';
 import '../widgets/common.dart';
 import 'root_nav.dart';
 
@@ -32,13 +32,11 @@ class LandingScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(
+                ProfileAvatar(
+                  perfil: perfil,
                   radius: 118, // 70% de 168 (3x) — redução de 30%
+                  fontSize: 118,
                   backgroundColor: onCor.withValues(alpha: 0.08),
-                  child: Text(
-                    perfil?.avatar ?? UserProfile.avatarPadrao,
-                    style: const TextStyle(fontSize: 118),
-                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(

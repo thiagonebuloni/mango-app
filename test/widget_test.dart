@@ -20,6 +20,7 @@ import 'package:financ/screens/profile_setup_screen.dart';
 import 'package:financ/screens/reports_screen.dart';
 import 'package:financ/state/providers.dart';
 import 'package:financ/theme/app_theme.dart';
+import 'package:financ/widgets/avatar.dart';
 import 'package:financ/widgets/common.dart';
 
 /// Perfil já cadastrado (casos de "demais aberturas" do app).
@@ -543,6 +544,11 @@ void main() async {
 
       await tester.tap(find.byKey(const ValueKey('avatar-preview')));
       await tester.pumpAndSettle();
+      // O toque no avatar abre o menu (emoticon ou foto): escolher o
+      // emoticon abre a grade de emojis.
+      expect(find.text('Escolher emoticon'), findsOneWidget);
+      await tester.tap(find.text('Escolher emoticon'));
+      await tester.pumpAndSettle();
       expect(find.text('Escolha um emoji'), findsOneWidget);
 
       // Família (emoji com vários code points) é guardada inteira.
@@ -558,6 +564,69 @@ void main() async {
       await tester.pumpAndSettle();
 
       expect(notifier.salvo?.avatar, '👨‍👩‍👧');
+    });
+  });
+
+  group('Avatar (foto e recorte)', () {
+    testWidgets('tocar no avatar abre o menu com emoticon e foto',
+        (tester) async {
+      final notifier = _FakeProfileNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [profileProvider.overrideWith(() => notifier)],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('avatar-preview')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Escolher emoticon'), findsOneWidget);
+      expect(find.text('Foto da galeria'), findsOneWidget);
+      expect(find.text('Tirar foto'), findsOneWidget);
+      // Sem foto ainda: sem opções de ajuste/remoção.
+      expect(find.text('Ajustar posi\u00e7\u00e3o e recorte'), findsNothing);
+      expect(find.text('Remover foto'), findsNothing);
+    });
+
+    test('limite da foto do avatar: at\u00e9 5 MB passa', () {
+      expect(validarTamanhoAvatar(kMaxAvatarImageBytes), isNull);
+      expect(validarTamanhoAvatar(3 * 1024 * 1024), isNull);
+
+      final erro = validarTamanhoAvatar(12 * 1024 * 1024);
+      expect(erro, isNotNull);
+      expect(erro, contains('12.0 MB'));
+      expect(erro, contains('m\u00e1ximo 5 MB'));
+    });
+
+    test('perfil com foto guarda recorte e cai para o emoticon sem foto', () {
+      const comFoto = UserProfile(
+        nome: 'Ana',
+        avatar: '\ud83e\udd8a',
+        corFundo: 0xFFE3F2FD,
+        avatarImagePath: '/tmp/avatar.jpg',
+        avatarAlignX: 0.5,
+        avatarAlignY: -0.5,
+        avatarZoom: 2,
+      );
+      expect(comFoto.temFoto, isTrue);
+      final mapa = comFoto.toMap();
+      expect(mapa['avatar_img'], '/tmp/avatar.jpg');
+      expect(mapa['avatar_ax'], 0.5);
+      expect(mapa['avatar_zoom'], 2);
+      final lido = UserProfile.fromMap(mapa);
+      expect(lido.avatarImagePath, '/tmp/avatar.jpg');
+      expect(lido.avatarAlignX, 0.5);
+      expect(lido.avatarZoom, 2);
+      // Perfis antigos (sem as colunas novas) continuam com o emoticon.
+      final antigo = UserProfile.fromMap(const {
+        'nome': 'Ana',
+        'avatar': '\ud83e\udd8a',
+        'cor': 0xFFE3F2FD,
+      });
+      expect(antigo.temFoto, isFalse);
+      expect(antigo.avatarImagePath, isNull);
     });
   });
 

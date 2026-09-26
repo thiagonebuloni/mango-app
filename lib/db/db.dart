@@ -38,20 +38,27 @@ class DBHelper {
   ''';
 
   /// Perfil do usuário (nome, avatar, cor de fundo e tema): uma única linha.
+  /// v5 acrescenta a foto do avatar + posição/zoom do recorte.
   static const _profileTable = '''
     CREATE TABLE profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       nome TEXT NOT NULL,
       avatar TEXT NOT NULL,
       cor INTEGER NOT NULL,
-      tema_claro INTEGER NOT NULL DEFAULT 1
+      tema_claro INTEGER NOT NULL DEFAULT 1,
+      avatar_img TEXT,
+      avatar_ax REAL NOT NULL DEFAULT 0,
+      avatar_ay REAL NOT NULL DEFAULT 0,
+      avatar_zoom REAL NOT NULL DEFAULT 1
     )
   ''';
 
   /// v1 = gastos + memória de categorias; v2 = perfil do usuário;
   /// v3 = coluna `tipo` (despesa/receita) em expenses;
-  /// v4 = coluna `tema_claro` (tema claro/escuro) em profile.
-  static const _dbVersion = 4;
+  /// v4 = coluna `tema_claro` (tema claro/escuro) em profile;
+  /// v5 = foto do avatar (`avatar_img`) + posição/zoom do recorte
+  /// (`avatar_ax`, `avatar_ay`, `avatar_zoom`) em profile.
+  static const _dbVersion = 5;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -78,6 +85,27 @@ class DBHelper {
           if (!temTema) {
             await db.execute(
                 'ALTER TABLE profile ADD COLUMN tema_claro INTEGER NOT NULL DEFAULT 1');
+          }
+        }
+        if (oldVersion < 5) {
+          // Foto do avatar + posição/zoom do recorte: perfis antigos
+          // continuam com o emoticon (avatar_img NULL).
+          final cols = await db.rawQuery('PRAGMA table_info(profile)');
+          final nomes = cols.map((c) => c['name'] as String?).toSet();
+          if (!nomes.contains('avatar_img')) {
+            await db.execute('ALTER TABLE profile ADD COLUMN avatar_img TEXT');
+          }
+          if (!nomes.contains('avatar_ax')) {
+            await db.execute(
+                'ALTER TABLE profile ADD COLUMN avatar_ax REAL NOT NULL DEFAULT 0');
+          }
+          if (!nomes.contains('avatar_ay')) {
+            await db.execute(
+                'ALTER TABLE profile ADD COLUMN avatar_ay REAL NOT NULL DEFAULT 0');
+          }
+          if (!nomes.contains('avatar_zoom')) {
+            await db.execute(
+                'ALTER TABLE profile ADD COLUMN avatar_zoom REAL NOT NULL DEFAULT 1');
           }
         }
       },

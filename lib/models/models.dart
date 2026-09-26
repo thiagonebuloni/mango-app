@@ -300,16 +300,30 @@ class ReceiptDraft {
 /// tabela `profile` (app local: sem login, sem servidor).
 class UserProfile {
   final String nome;
-  final String avatar; // emoticon escolhido (ex.: '🦊')
+  /// Emoticon escolhido (ex.: '🦊'). Usado quando não há foto
+  /// ([avatarImagePath] == null) ou a foto não pode ser lida.
+  final String avatar;
   final int corFundo; // cor de fundo da tela inicial, em ARGB
   /// `true` = tema claro; `false` = tema escuro.
   final bool temaClaro;
+  /// Caminho local da foto do avatar (cópia dentro dos documentos do app).
+  /// `null` = usar o emoticon [avatar].
+  final String? avatarImagePath;
+  /// Posição do recorte da foto (-1..1 em cada eixo, como [Alignment]).
+  final double avatarAlignX;
+  final double avatarAlignY;
+  /// Zoom aplicado sobre a foto (1 = sem zoom).
+  final double avatarZoom;
 
   const UserProfile({
     required this.nome,
     required this.avatar,
     required this.corFundo,
     this.temaClaro = true,
+    this.avatarImagePath,
+    this.avatarAlignX = 0,
+    this.avatarAlignY = 0,
+    this.avatarZoom = 1,
   });
 
   /// Valores usados quando o usuário ainda não escolheu nada.
@@ -317,17 +331,30 @@ class UserProfile {
   static const int corFundoPadrao = 0xFFE0F2F1;
   static const int corFundoEscuroPadrao = 0xFF33393B;
 
+  /// `true` quando há uma foto de avatar para exibir em vez do emoticon.
+  bool get temFoto =>
+      avatarImagePath != null && avatarImagePath!.trim().isNotEmpty;
+
   UserProfile copyWith({
     String? nome,
     String? avatar,
     int? corFundo,
     bool? temaClaro,
+    String? Function()? avatarImagePath,
+    double? avatarAlignX,
+    double? avatarAlignY,
+    double? avatarZoom,
   }) =>
       UserProfile(
         nome: nome ?? this.nome,
         avatar: avatar ?? this.avatar,
         corFundo: corFundo ?? this.corFundo,
         temaClaro: temaClaro ?? this.temaClaro,
+        avatarImagePath:
+            avatarImagePath != null ? avatarImagePath() : this.avatarImagePath,
+        avatarAlignX: avatarAlignX ?? this.avatarAlignX,
+        avatarAlignY: avatarAlignY ?? this.avatarAlignY,
+        avatarZoom: avatarZoom ?? this.avatarZoom,
       );
 
   Map<String, Object?> toMap() => {
@@ -336,6 +363,10 @@ class UserProfile {
         'avatar': avatar,
         'cor': corFundo,
         'tema_claro': temaClaro ? 1 : 0,
+        'avatar_img': avatarImagePath,
+        'avatar_ax': avatarAlignX,
+        'avatar_ay': avatarAlignY,
+        'avatar_zoom': avatarZoom,
       };
 
   static UserProfile fromMap(Map<String, Object?> map) => UserProfile(
@@ -347,10 +378,25 @@ class UserProfile {
           final bool v => v,
           _ => true, // perfis antigos: continuam no tema claro
         },
+        avatarImagePath: (map['avatar_img'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : map['avatar_img'] as String?,
+        avatarAlignX: switch (map['avatar_ax']) {
+          final num v => v.toDouble().clamp(-1.0, 1.0),
+          _ => 0,
+        },
+        avatarAlignY: switch (map['avatar_ay']) {
+          final num v => v.toDouble().clamp(-1.0, 1.0),
+          _ => 0,
+        },
+        avatarZoom: switch (map['avatar_zoom']) {
+          final num v => v.toDouble().clamp(1.0, 3.0),
+          _ => 1,
+        },
       );
 
   @override
   String toString() =>
       'UserProfile(nome: $nome, avatar: $avatar, cor: $corFundo, '
-      'temaClaro: $temaClaro)';
+      'temaClaro: $temaClaro, foto: $avatarImagePath)';
 }
