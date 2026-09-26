@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart'
     hide Category;
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,6 +86,19 @@ Expense _gasto(int i) {
     categoria: Category.mercado,
     forma: PaymentMethod.dinheiro,
     estabelecimento: 'MERCADO TESTE $i',
+  );
+}
+
+/// Receita de hoje (meio-dia) para os testes do gráfico despesas x receitas.
+Expense _receita(int i) {
+  final now = DateTime.now();
+  return Expense(
+    tipo: EntryKind.receita,
+    valorCentavos: 5000 + i * 100,
+    dataHora: DateTime(now.year, now.month, now.day, 12),
+    categoria: Category.salario,
+    forma: PaymentMethod.pix,
+    estabelecimento: 'EMPRESA TESTE $i',
   );
 }
 
@@ -253,6 +267,69 @@ void main() async {
   });
 
   group('ReportsScreen (barra de períodos)', () {
+    testWidgets('mostra gráfico de barras despesas x receitas do período',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier([_gasto(0), _receita(0)])),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Despesas x Receitas'), findsOneWidget);
+      // Barras do gráfico: uma para despesas, uma para receitas.
+      expect(find.byType(BarChart), findsOneWidget);
+      // Valores por extenso na legenda, abaixo das barras (o rótulo aparece
+      // 2x: título do eixo do gráfico + legenda com o valor).
+      expect(find.text('Despesas'), findsNWidgets(2));
+      expect(find.text('Receitas'), findsNWidgets(2));
+      // O valor aparece 2x: legenda do gráfico + cartão "Gastos por dia".
+      expect(find.text('R\$ 10,00'), findsNWidgets(2));
+      expect(find.text('R\$ 50,00'), findsOneWidget);
+      // Saldo = receitas − despesas, positivo usa "+" em verde.
+      expect(find.text('Saldo'), findsOneWidget);
+      expect(find.text('+ R\$ 40,00'), findsOneWidget);
+    });
+
+    testWidgets('saldo negativo usa "-" em vermelho',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier([_gasto(5)])),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Só despesa de R$ 15,00: saldo = -R$ 15,00.
+      expect(find.text('- R\$ 15,00'), findsOneWidget);
+      final saldo = tester.widget<Text>(find.text('- R\$ 15,00'));
+      expect(saldo.style?.color, Colors.red.shade400);
+    });
+
+    testWidgets('gráfico despesas x receitas aparece mesmo sem lançamentos',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider.overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Despesas x Receitas'), findsOneWidget);
+      expect(find.byType(BarChart), findsOneWidget);
+    });
+
     testWidgets('botões Mês/30 dias/Ano/Custom ficam centralizados',
         (tester) async {
       await tester.pumpWidget(
@@ -324,7 +401,9 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
-      // Rola a página até o fim.
+      // Rola a página até o fim (em etapas: a página cresce com novos cartões).
+      await tester.drag(find.byType(ListView), const Offset(0, -1500));
+      await tester.pumpAndSettle();
       await tester.drag(find.byType(ListView), const Offset(0, -1500));
       await tester.pumpAndSettle();
 

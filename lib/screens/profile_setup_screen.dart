@@ -9,9 +9,22 @@ import '../widgets/common.dart';
 
 /// Avatares (emoticons) oferecidos no cadastro do perfil.
 const List<String> kProfileAvatars = [
-  '🙂', '😀', '😎', '🤓', '🥳', '🤩',
-  '🐱', '🐶', '🦊', '🐼', '🦁', '🐸',
-  '🌟', '🍀', '🚀', '🎯',
+  '🙂',
+  '😀',
+  '😎',
+  '🤓',
+  '🥳',
+  '🤩',
+  '🐱',
+  '🐶',
+  '🦊',
+  '🐼',
+  '🦁',
+  '🐸',
+  '🌟',
+  '🍀',
+  '🚀',
+  '🎯',
 ];
 
 /// Cores de fundo da tela inicial.
@@ -37,8 +50,7 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key, this.existing});
 
   @override
-  ConsumerState<ProfileSetupScreen> createState() =>
-      _ProfileSetupScreenState();
+  ConsumerState<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
 }
 
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
@@ -116,7 +128,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _saving = true);
-    await ref.read(profileProvider.notifier).save(
+    await ref
+        .read(profileProvider.notifier)
+        .save(
           UserProfile(
             nome: _nome.text.trim(),
             avatar: _avatar,
@@ -195,6 +209,21 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     // tema escuro (igual ao resto do app — ver [kFundoTemaEscuro]).
     final fundoPrevia = _temaClaro ? _cor : kFundoTemaEscuro;
     final onCor = onBackgroundColor(fundoPrevia);
+    // Prévia em tempo real: deriva um Theme da seleção atual (cor + modo) e
+    // envolve a tela, para que os highlights (SegmentedButton de tema,
+    // seleção de avatar/cor, botões e barra de rolagem) usem a cor do tema
+    // escolhido antes de salvar — igual ao restante do app via buildAppTheme.
+    final previaPerfil = UserProfile(
+      nome: _nome.text.trim(),
+      avatar: _avatar,
+      corFundo: _cor.toARGB32(),
+      temaClaro: _temaClaro,
+    );
+    final previaTheme = buildAppTheme(
+      corFundoDoPerfil(previaPerfil),
+      temaClaro: temaClaroDoPerfil(previaPerfil),
+      corAcento: corAcentoDoPerfil(previaPerfil),
+    );
 
     return PopScope<Object?>(
       // Na edição, sair com alterações não salvas pede confirmação; sem
@@ -204,44 +233,47 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         if (didPop) return;
         await _confirmarSaida();
       },
-      child: Scaffold(
-        backgroundColor: fundoPrevia,
-        appBar: _isEdit
-            ? AppBar(
-                title: const Text('Editar perfil'),
-                backgroundColor: Colors.transparent,
-                foregroundColor: onCor,
-              )
-            : null,
-        body: SafeArea(
-          child: Center(
-            child: Scrollbar(
-              controller: _scrollController,
-              thumbVisibility: true,
-              child: SingleChildScrollView(
+      child: Theme(
+        data: previaTheme,
+        child: Scaffold(
+          backgroundColor: fundoPrevia,
+          appBar: _isEdit
+              ? AppBar(
+                  title: const Text('Editar perfil'),
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: onCor,
+                )
+              : null,
+          body: SafeArea(
+            child: Center(
+              child: Scrollbar(
                 controller: _scrollController,
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _cabecalho(onCor),
-                      _previewAvatar(onCor),
-                      _campoNome(onCor),
-                      const SizedBox(height: 20),
-                      _escolhaAvatar(onCor),
-                      const SizedBox(height: 20),
-                      _escolhaTema(onCor),
-                      const SizedBox(height: 20),
-                      _escolhaCor(onCor),
-                      const SizedBox(height: 28),
-                      _botaoSalvar(),
-                    ],
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _cabecalho(onCor),
+                          _previewAvatar(onCor),
+                          _campoNome(onCor),
+                          const SizedBox(height: 20),
+                          _escolhaAvatar(onCor),
+                          const SizedBox(height: 20),
+                          _escolhaTema(onCor),
+                          const SizedBox(height: 20),
+                          _escolhaCor(onCor),
+                          const SizedBox(height: 28),
+                          _botaoSalvar(),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
                 ),
               ),
             ),
@@ -252,187 +284,194 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   Widget _cabecalho(Color onCor) => Column(
-        children: [
-          Text(
-            _isEdit ? 'Editar perfil' : 'Bem-vindo!',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 26, fontWeight: FontWeight.bold, color: onCor),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _isEdit
-                ? 'Ajuste seu nome, avatar e cor de fundo.'
-                : 'Vamos criar seu perfil para personalizar o app.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: onCor.withValues(alpha: 0.7)),
-          ),
-        ],
-      );
+    children: [
+      Text(
+        _isEdit ? 'Editar perfil' : 'Bem-vindo!',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.bold,
+          color: onCor,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        _isEdit
+            ? 'Ajuste seu nome, avatar e cor de fundo.'
+            : 'Vamos criar seu perfil para personalizar o app.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: onCor.withValues(alpha: 0.7)),
+      ),
+    ],
+  );
 
   Widget _previewAvatar(Color onCor) => Padding(
-        padding: const EdgeInsets.only(top: 24),
-        child: Tooltip(
-          message: 'Toque para escolher outro emoji',
-          child: InkWell(
-            key: const ValueKey('avatar-preview'),
-            onTap: _escolherEmojiDaGrade,
-            customBorder: const CircleBorder(),
-            child: CircleAvatar(
-              radius: 48,
-              backgroundColor: onCor.withValues(alpha: 0.08),
-              child: Text(_avatar, style: const TextStyle(fontSize: 48)),
-            ),
-          ),
+    padding: const EdgeInsets.only(top: 24),
+    child: Tooltip(
+      message: 'Toque para escolher outro emoji',
+      child: InkWell(
+        key: const ValueKey('avatar-preview'),
+        onTap: _escolherEmojiDaGrade,
+        customBorder: const CircleBorder(),
+        child: CircleAvatar(
+          radius: 48,
+          backgroundColor: onCor.withValues(alpha: 0.08),
+          child: Text(_avatar, style: const TextStyle(fontSize: 48)),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _campoNome(Color onCor) => Padding(
-        padding: const EdgeInsets.only(top: 24),
-        child: TextFormField(
-          controller: _nome,
-          textCapitalization: TextCapitalization.words,
-          maxLength: 24,
-          // Cor explícita a partir da prévia do fundo (não do Theme do app):
-          // ao alternar o tema na edição, o Scaffold mostra a prévia mas o
-          // Theme ainda é o do perfil salvo — sem isto o texto herdaria a cor
-          // errada (ex.: branco sobre fundo claro, sem contraste).
-          style: TextStyle(color: onCor),
-          decoration: InputDecoration(
-            labelText: 'Nome do usuário',
-            labelStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
-            floatingLabelStyle: TextStyle(color: onCor),
-            prefixIcon: const Icon(Icons.person_outline),
-            prefixIconColor: onCor.withValues(alpha: 0.7),
-            suffixIconColor: onCor.withValues(alpha: 0.7),
-            counterStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
-            errorStyle: const TextStyle(color: Colors.redAccent),
-            filled: true,
-            fillColor: onCor.withValues(alpha: 0.05),
-            counterText: '',
-            enabledBorder: OutlineInputBorder(
-              borderSide:
-                  BorderSide(color: onCor.withValues(alpha: 0.35)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: onCor, width: 1.6),
-            ),
-            errorBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.redAccent),
-            ),
-            focusedErrorBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.redAccent, width: 1.6),
-            ),
-            border: const OutlineInputBorder(),
-          ),
-          validator: (v) =>
-              (v ?? '').trim().isEmpty ? 'Informe seu nome' : null,
-          onFieldSubmitted: (_) => _salvar(),
+    padding: const EdgeInsets.only(top: 24),
+    child: TextFormField(
+      controller: _nome,
+      textCapitalization: TextCapitalization.words,
+      maxLength: 24,
+      // Cor explícita a partir da prévia do fundo (não do Theme do app):
+      // ao alternar o tema na edição, o Scaffold mostra a prévia mas o
+      // Theme ainda é o do perfil salvo — sem isto o texto herdaria a cor
+      // errada (ex.: branco sobre fundo claro, sem contraste).
+      style: TextStyle(color: onCor),
+      decoration: InputDecoration(
+        labelText: 'Nome do usuário',
+        labelStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
+        floatingLabelStyle: TextStyle(color: onCor),
+        prefixIcon: const Icon(Icons.person_outline),
+        prefixIconColor: onCor.withValues(alpha: 0.7),
+        suffixIconColor: onCor.withValues(alpha: 0.7),
+        counterStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
+        errorStyle: const TextStyle(color: Colors.redAccent),
+        filled: true,
+        fillColor: onCor.withValues(alpha: 0.05),
+        counterText: '',
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: onCor.withValues(alpha: 0.35)),
         ),
-      );
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: onCor, width: 1.6),
+        ),
+        errorBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.redAccent),
+        ),
+        focusedErrorBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.redAccent, width: 1.6),
+        ),
+        border: const OutlineInputBorder(),
+      ),
+      validator: (v) => (v ?? '').trim().isEmpty ? 'Informe seu nome' : null,
+      onFieldSubmitted: (_) => _salvar(),
+    ),
+  );
 
   Widget _escolhaAvatar(Color onCor) => Column(
+    children: [
+      Text(
+        'Escolha seu avatar',
+        style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
         children: [
-          Text('Escolha seu avatar',
-              style: TextStyle(fontWeight: FontWeight.bold, color: onCor)),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final avatar in kProfileAvatars)
-                _AvatarChoice(
-                  avatar: avatar,
-                  selected: avatar == _avatar,
-                  onCor: onCor,
-                  onTap: () => setState(() => _avatar = avatar),
-                ),
-            ],
-          ),
-          // Os atalhos acima são só os mais usados: aqui abre a grade de emojis
-          // do app (categorias + busca + recentes) para escolher qualquer um.
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: TextButton.icon(
-              onPressed: _escolherEmojiDaGrade,
-              icon: const Icon(Icons.emoji_emotions_outlined),
-              label: const Text('Outro emoji'),
+          for (final avatar in kProfileAvatars)
+            _AvatarChoice(
+              avatar: avatar,
+              selected: avatar == _avatar,
+              onCor: onCor,
+              onTap: () => setState(() => _avatar = avatar),
             ),
-          ),
         ],
-      );
+      ),
+      // Os atalhos acima são só os mais usados: aqui abre a grade de emojis
+      // do app (categorias + busca + recentes) para escolher qualquer um.
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: TextButton.icon(
+          onPressed: _escolherEmojiDaGrade,
+          icon: const Icon(Icons.emoji_emotions_outlined),
+          label: const Text('Outro emoji'),
+        ),
+      ),
+    ],
+  );
 
   Widget _escolhaTema(Color onCor) => Column(
-        children: [
-          Text('Tema',
-              style: TextStyle(fontWeight: FontWeight.bold, color: onCor)),
-          const SizedBox(height: 12),
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(
-                value: true,
-                icon: Icon(Icons.light_mode_outlined),
-                label: Text('Tema claro'),
-              ),
-              ButtonSegment(
-                value: false,
-                icon: Icon(Icons.dark_mode_outlined),
-                label: Text('Tema escuro'),
-              ),
-            ],
-            selected: {_temaClaro},
-            onSelectionChanged: (selecao) {
-              final tema = selecao.first;
-              if (tema == _temaClaro) return;
-              setState(() {
-                _temaClaro = tema;
-                final paleta = _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
-                final origem = _temaClaro ? kCoresTemaEscuro : kCoresTemaClaro;
-                _cor = corNaPaleta(_cor, origem, paleta);
-              });
-            },
+    children: [
+      Text(
+        'Tema',
+        style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
+      ),
+      const SizedBox(height: 12),
+      SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment(
+            value: true,
+            icon: Icon(Icons.light_mode_outlined),
+            label: Text('Tema claro'),
+          ),
+          ButtonSegment(
+            value: false,
+            icon: Icon(Icons.dark_mode_outlined),
+            label: Text('Tema escuro'),
           ),
         ],
-      );
+        selected: {_temaClaro},
+        onSelectionChanged: (selecao) {
+          final tema = selecao.first;
+          if (tema == _temaClaro) return;
+          setState(() {
+            _temaClaro = tema;
+            final paleta = _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
+            final origem = _temaClaro ? kCoresTemaEscuro : kCoresTemaClaro;
+            _cor = corNaPaleta(_cor, origem, paleta);
+          });
+        },
+      ),
+    ],
+  );
 
   Widget _escolhaCor(Color onCor) => Column(
+    children: [
+      Text(
+        'Cor de fundo',
+        style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 12,
+        runSpacing: 12,
         children: [
-          Text('Cor de fundo',
-              style: TextStyle(fontWeight: FontWeight.bold, color: onCor)),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (var i = 0; i < _paletaCores.length; i++)
-                ColorChoice(
-                  key: ValueKey('cor-$i'),
-                  color: _paletaCores[i],
-                  selected: _paletaCores[i] == _cor,
-                  onCor: onCor,
-                  onTap: () => setState(() => _cor = _paletaCores[i]),
-                ),
-            ],
-          ),
+          for (var i = 0; i < _paletaCores.length; i++)
+            ColorChoice(
+              key: ValueKey('cor-$i'),
+              color: _paletaCores[i],
+              selected: _paletaCores[i] == _cor,
+              onCor: onCor,
+              onTap: () => setState(() => _cor = _paletaCores[i]),
+            ),
         ],
-      );
+      ),
+    ],
+  );
 
   Widget _botaoSalvar() => SizedBox(
-        width: 240,
-        child: FilledButton.icon(
-          onPressed: _saving ? null : _salvar,
-          icon: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(_isEdit ? Icons.check : Icons.arrow_forward),
-          label: Text(_isEdit ? 'Salvar' : 'Começar'),
-        ),
-      );
+    width: 240,
+    child: FilledButton.icon(
+      onPressed: _saving ? null : _salvar,
+      icon: _saving
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(_isEdit ? Icons.check : Icons.arrow_forward),
+      label: Text(_isEdit ? 'Salvar' : 'Começar'),
+    ),
+  );
 }
 
 /// Bolinha com um emoticon, marcada quando é o avatar escolhido.
@@ -540,8 +579,9 @@ class _EmojiSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
                 child: Text(
                   'Escolha um emoji',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Expanded(
@@ -575,4 +615,3 @@ class _EmojiSheet extends StatelessWidget {
     );
   }
 }
-

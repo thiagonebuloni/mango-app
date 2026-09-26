@@ -126,8 +126,11 @@ Color acentoDeFundoClaro(Color fundo) {
 ///
 /// É aplicado em `MaterialApp.theme` (ver `FinancApp`), então trocar a cor ou
 /// o tema no perfil repinta todas as telas na hora.
-ThemeData buildAppTheme(Color corFundo,
-    {bool temaClaro = true, Color? corAcento}) {
+ThemeData buildAppTheme(
+  Color corFundo, {
+  bool temaClaro = true,
+  Color? corAcento,
+}) {
   final seed =
       corAcento ?? (temaClaro ? acentoDeFundoClaro(corFundo) : corFundo);
   final base = ThemeData(
@@ -143,6 +146,11 @@ ThemeData buildAppTheme(Color corFundo,
   return base.copyWith(
     scaffoldBackgroundColor: corFundo,
     canvasColor: corFundo,
+    // Barra de rolagem na mesma cor do tema (primary): vale para todas
+    // as telas e, na edição do perfil, atualiza em tempo real com a prévia.
+    scrollbarTheme: base.scrollbarTheme.copyWith(
+      thumbColor: WidgetStatePropertyAll(base.colorScheme.primary),
+    ),
     appBarTheme: base.appBarTheme.copyWith(
       backgroundColor: corFundo,
       foregroundColor: onCor,
