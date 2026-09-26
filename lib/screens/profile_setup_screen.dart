@@ -27,8 +27,6 @@ const List<String> kProfileAvatars = [
   '🐸',
   '🌟',
   '🍀',
-  '🚀',
-  '🎯',
 ];
 
 /// Cores de fundo da tela inicial.
@@ -803,10 +801,14 @@ class _AjusteFotoSheetState extends State<_AjusteFotoSheet> {
             ),
             const SizedBox(height: 16),
             GestureDetector(
-              // Arrastar move o recorte (pan / delta normalizado p/ -1..1).
+              // Arrastar move a foto junto com o dedo (1:1 de direção).
+              // O `Alignment` da imagem é invertido em relação ao gesto:
+              // aumentar `Alignment` desloca a imagem para o lado oposto
+              // (ex.: `ay +1` mostra a base = imagem "sobe"), então o delta
+              // do arrasto entra com sinal negativo nos dois eixos.
               onPanUpdate: (d) => setState(() {
-                _ax = (_ax + d.delta.dx / 80).clamp(-1.0, 1.0);
-                _ay = (_ay + d.delta.dy / 80).clamp(-1.0, 1.0);
+                _ax = (_ax - d.delta.dx / 80).clamp(-1.0, 1.0);
+                _ay = (_ay - d.delta.dy / 80).clamp(-1.0, 1.0);
               }),
               child: CircleAvatar(
                 radius: 110,
