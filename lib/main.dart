@@ -43,6 +43,7 @@ class FinancApp extends ConsumerWidget {
       theme: buildAppTheme(
         corFundoDoPerfil(perfil),
         temaClaro: temaClaroDoPerfil(perfil),
+        corAcento: corAcentoDoPerfil(perfil),
       ),
       home: const ProfileGate(),
       locale: const Locale('pt', 'BR'),

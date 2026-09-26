@@ -255,22 +255,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         error: (e, _) => Center(child: Text('Erro ao carregar: $e')),
         data: (expenses) {
           final now = DateTime.now();
-          final summary = summarize(expenses, now);
+          // Gastos do mês visível (contexto selecionado nas setas/seletor).
           final monthExpenses = expenses.where((e) {
             return !e.dataHora.isBefore(_monthStart) &&
                 e.dataHora.isBefore(_monthEnd);
           }).toList();
 
-          // Lista exibida: mês visível, refinada pelo filtro rápido.
-          // O filtro Dia/Semana é relativo a "hoje" no mês atual; ao navegar
-          // para meses passados ele ancora no último dia daquele mês, para
-          // que Semana/Mês continuem mostrando algo útil.
+          // Referência para Dia/Semana: "hoje" no mês atual; último dia do
+          // mês visível nos meses passados. Assim os cards Dia/Semana/Mês
+          // sempre representam o mês selecionado, e não o mês atual.
           final DateTime refNow = _isCurrentMonth
               ? now
-              : DateTime(_monthEnd.year, _monthEnd.month, _monthEnd.day)
-                  .subtract(const Duration(days: 1));
+              : _monthEnd.subtract(const Duration(days: 1));
           final d0 = Periods.startOfDay(refNow);
           final w0 = Periods.startOfWeek(refNow);
+
+          // Totais dos cards restritos ao mês visível (só despesas, como
+          // antes): Dia = último dia (ou hoje), Semana = última semana
+          // (ou semana atual), Mês = mês visível inteiro.
+          final diaTotal = totalOf(
+              monthExpenses.where((e) => !e.dataHora.isBefore(d0)));
+          final semanaTotal = totalOf(
+              monthExpenses.where((e) => !e.dataHora.isBefore(w0)));
+          final mesTotal = totalOf(monthExpenses);
           final List<Expense> visibleExpenses;
           switch (_filtro) {
             case _FiltroRapido.dia:
@@ -311,7 +318,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         _SummaryCard(
                           label: 'Dia',
-                          value: summary.dia,
+                          value: diaTotal,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.dia,
                           corDestaque: destaque,
@@ -320,7 +327,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const SizedBox(width: 8),
                         _SummaryCard(
                           label: 'Semana',
-                          value: summary.semana,
+                          value: semanaTotal,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.semana,
                           corDestaque: destaque,
@@ -329,7 +336,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const SizedBox(width: 8),
                         _SummaryCard(
                           label: 'Mês',
-                          value: summary.mes,
+                          value: mesTotal,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.mes,
                           corDestaque: destaque,

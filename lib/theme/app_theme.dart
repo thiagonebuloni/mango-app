@@ -86,18 +86,55 @@ Color? corDestaqueDoPerfil(UserProfile? perfil) {
   return cor;
 }
 
+/// Cor de acento do app: deriva da cor escolhida no perfil e alimenta o
+/// `seedColor` do tema. Assim o botão "+" de lançamento, as abas "Gastos" e
+/// "Relatórios" (indicador da NavigationBar), a seleção de datas
+/// (DatePicker/DateRangePicker), os botões "Tirar foto"/"Escolher da galeria"
+/// e toda a tela de "Nova despesa"/"Nova receita" (SegmentedButton, campos
+/// focados, "Salvar") — incluindo o diálogo "Cancelar lançamento" — seguem a
+/// cor do perfil.
+///
+/// - Tema claro: a cor de fundo é pastel (clara demais para virar `seed`),
+///   então devolve um tom saturado/escuro do mesmo matiz.
+/// - Tema escuro: devolve a cor forte escolhida ([corDestaqueDoPerfil]).
+Color corAcentoDoPerfil(UserProfile? perfil) {
+  final destaque = corDestaqueDoPerfil(perfil);
+  if (destaque != null) return destaque;
+  return acentoDeFundoClaro(corFundoDoPerfil(perfil));
+}
+
+/// Deriva um tom de acento saturado a partir de um fundo claro (pastel).
+/// Mantém o matiz do fundo, forçando saturação e luminosidade legíveis para
+/// botões/seleções. Fundos acinzentados (sem matiz) caem no verde-água padrão.
+Color acentoDeFundoClaro(Color fundo) {
+  final hsl = HSLColor.fromColor(fundo);
+  if (hsl.saturation < 0.15) return Colors.teal;
+  return hsl
+      .withSaturation(hsl.saturation.clamp(0.55, 0.9))
+      .withLightness(0.38)
+      .toColor();
+}
+
 /// Tema do app construído a partir do perfil do usuário (cor de fundo + modo
 /// claro/escuro). A cor vale para todo o app: fundo dos Scaffolds, AppBar,
 /// barra de navegação inferior, diálogos e bottom sheets.
 ///
+/// O [seedColor] (botões, indicador da NavigationBar, seleção de datas,
+/// SegmentedButton, campos focados) deriva da cor do perfil via
+/// [corAcentoDoPerfil]: passe `corAcento` quando o tema claro usa um tom
+/// saturado em vez do fundo pastel.
+///
 /// É aplicado em `MaterialApp.theme` (ver `FinancApp`), então trocar a cor ou
 /// o tema no perfil repinta todas as telas na hora.
-ThemeData buildAppTheme(Color corFundo, {bool temaClaro = true}) {
+ThemeData buildAppTheme(Color corFundo,
+    {bool temaClaro = true, Color? corAcento}) {
+  final seed =
+      corAcento ?? (temaClaro ? acentoDeFundoClaro(corFundo) : corFundo);
   final base = ThemeData(
     useMaterial3: true,
     brightness: temaClaro ? Brightness.light : Brightness.dark,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: temaClaro ? Colors.teal : corFundo,
+      seedColor: seed,
       brightness: temaClaro ? Brightness.light : Brightness.dark,
     ),
   );

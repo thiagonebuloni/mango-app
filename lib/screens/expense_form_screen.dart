@@ -278,25 +278,29 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 ),
               if (!_isEdit && d == null) const SizedBox(height: 8),
               if (d != null) ...[
-                Card(
-                  color: Colors.teal.withValues(alpha: 0.08),
-                  child: const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Icon(Icons.receipt_long,
-                            color: Colors.teal),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Dados extraídos do cupom.\nConfira '
-                            'antes de salvar.',
-                            style: TextStyle(color: Colors.teal),
-                          ),
+                Builder(
+                  builder: (context) {
+                    final primary = Theme.of(context).colorScheme.primary;
+                    return Card(
+                      color: primary.withValues(alpha: 0.08),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.receipt_long, color: primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Dados extraídos do cupom.\nConfira '
+                                'antes de salvar.',
+                                style: TextStyle(color: primary),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
               ],

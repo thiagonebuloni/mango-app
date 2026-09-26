@@ -4,9 +4,6 @@ App mobile (Flutter) para registrar gastos, organizá-los em categorias e somar
 total **diário, semanal e mensal**. Cada gasto pode ser digitado manualmente ou
 preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-device).
 
-No **primeiro acesso** o app pede um perfil (nome, avatar emoji e cor de fundo).
-Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os botões
-**Meus gastos** e **Menu** (relatórios, editar perfil e sobre).
 
 ## Como funciona (custo R$ 0)
 
@@ -26,10 +23,6 @@ Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os bot�
 - **Perfil e tela inicial:** nome, avatar (emoticon) e cor de fundo escolhidos
   no primeiro acesso (`lib/screens/profile_setup_screen.dart`); a tela inicial
   (`lib/screens/landing_screen.dart`) mostra avatar + nome e os botões
-  **Meus gastos** e **Menu**, tudo centralizado.
-- **Cor de fundo em todo o app:** a cor escolhida no perfil é o tema do app
-  (`lib/theme/app_theme.dart`): fundo dos Scaffolds, AppBar, barra de navegação,
-  diálogos e bottom sheets. Trocar a cor no perfil repinta tudo na hora.
 - **Foto do cupom:** limite de 8 MB — imagens maiores (em geral vindas da
   galeria) são recusadas **antes** de decodificar/rodar o OCR, pois decodificar
   aloca muito mais memória e pode travar o app em aparelhos simples.
@@ -37,8 +30,6 @@ Depois disso, toda abertura começa na **tela inicial**: avatar + nome + os bot�
   app — que já abre direto com todos (busca, categorias e recentes), sem
   depender do teclado do aparelho. O avatar guarda o primeiro emoticon
   (funciona com compostos como 👨‍👩‍👧).
-- **Sair da edição do perfil** com alterações não salvas pede confirmação;
-  sem alterações, sai direto.
 - **Fallback IA (opcional):** `lib/services/ai_fallback.dart` documenta o ponto
   de extensão para Gemini Flash (camada gratuita), enviando só o texto do OCR.
 
@@ -63,10 +54,6 @@ flutter devices            # confira o aparelho/emulador conectado
 flutter run                # debug no dispositivo padrão
 flutter run -d <device_id> # escolher dispositivo específico
 ```
-
-Ao abrir o app pela primeira vez: cadastro do perfil (**nome**, **avatar** em
-símbolos e **cor de fundo**). Depois, a tela inicial mostra o avatar, o nome e os
-botões **Meus gastos** e **Menu**.
 
 Dentro do app, botão **+** → "Foto do cupom fiscal" (câmera/galeria) ou
 "Lançamento manual". Aba **Relatórios** mostra total do período, gráfico por
