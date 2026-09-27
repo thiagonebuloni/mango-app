@@ -151,7 +151,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           setState(() => _period = _Period.values[i]);
                         }
                       },
-                      borderRadius: const BorderRadius.all(Radius.circular(8)),
+                      borderRadius: const BorderRadius.all(Radius.circular(14)),
                       selectedColor: destaque == null
                           ? Colors.white
                           : onBackgroundColor(destaque),

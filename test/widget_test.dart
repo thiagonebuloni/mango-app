@@ -79,6 +79,30 @@ class _FakeReportsNotifier extends ExpensesForReports {
   Future<List<Expense>> build() async => _expenses;
 }
 
+/// Rola a edição de perfil até o botão "Salvar" ficar tocável.
+///
+/// A tela de edição é mais alta que a viewport de teste (600px), então rola
+/// o [SingleChildScrollView] da tela até o centro do botão entrar na
+/// viewport (só estar parcialmente visível não basta para o `tap`).
+Future<void> _rolarAteSalvar(WidgetTester tester) async {
+  final salvar = find.text('Salvar');
+  final view = find.byType(SingleChildScrollView);
+  await tester.dragUntilVisible(
+    salvar,
+    view,
+    const Offset(0, -200),
+  );
+  await tester.pumpAndSettle();
+  // `dragUntilVisible` para na primeira aparição parcial: continua rolando
+  // até o centro do botão (usado pelo `tap`) entrar na viewport de 600px.
+  for (var i = 0; i < 5; i++) {
+    final dy = tester.getCenter(salvar).dy;
+    if (dy < 550) break;
+    await tester.drag(view, const Offset(0, -200));
+    await tester.pumpAndSettle();
+  }
+}
+
 /// Gasto de hoje (meio-dia) para as telas com dados — sempre cai no mês atual.
 Expense _gasto(int i) {
   final now = DateTime.now();
@@ -872,8 +896,7 @@ void main() async {
       expect(find.text('Ana'), findsOneWidget);
 
       await tester.enterText(find.byType(TextFormField), 'Beatriz');
-      await tester.ensureVisible(find.text('Salvar'));
-      await tester.pumpAndSettle();
+      await _rolarAteSalvar(tester);
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
@@ -1027,8 +1050,7 @@ void main() async {
       await tester.ensureVisible(find.byKey(const ValueKey('cor-2')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('cor-2'))); // lilás
-      await tester.ensureVisible(find.text('Salvar'));
-      await tester.pumpAndSettle();
+      await _rolarAteSalvar(tester);
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
@@ -1113,8 +1135,9 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Tema claro'), findsOneWidget);
-      expect(find.text('Tema escuro'), findsOneWidget);
+      expect(find.text('Tema'), findsOneWidget);
+      expect(find.text('Claro'), findsOneWidget);
+      expect(find.text('Escuro'), findsOneWidget);
       expect(find.byType(Scrollbar), findsOneWidget);
       expect(
         tester
@@ -1128,9 +1151,9 @@ void main() async {
           tester.widget<TextField>(find.byType(TextField).first);
       expect(campoClaro.style?.color, onBackgroundColor(kCoresTemaClaro[1]));
 
-      await tester.ensureVisible(find.text('Tema escuro'));
+      await tester.ensureVisible(find.text('Escuro'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Tema escuro'));
+      await tester.tap(find.text('Escuro'));
       await tester.pumpAndSettle();
 
       expect(
@@ -1149,13 +1172,63 @@ void main() async {
           tester.widget<TextField>(find.byType(TextField).first);
       expect(campoEscuro.style?.color, onBackgroundColor(kFundoTemaEscuro));
 
-      await tester.ensureVisible(find.text('Salvar'));
-      await tester.pumpAndSettle();
+      await _rolarAteSalvar(tester);
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
       expect(notifier.salvo?.temaClaro, isFalse);
       expect(notifier.salvo?.corFundo, kCoresTemaEscuro[1].toARGB32());
+    });
+
+    testWidgets('card de Tema muda sozinho ao escolher outra cor',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider.overrideWith(() => _FakeProfileNotifier(_perfilTeste)),
+          ],
+          child:
+              _makeApp(home: ProfileSetupScreen(existing: _perfilTeste)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Fundo do card de Tema derivado da cor inicial (tema claro).
+      Color corCard() => (tester
+              .widget<Container>(find.byKey(const ValueKey('tema-card')))
+              .decoration! as BoxDecoration)
+          .color!;
+
+      final cardInicial = corCard();
+      expect(
+        cardInicial,
+        Color.lerp(kCoresTemaClaro[1], Colors.white, 0.35),
+      );
+
+      // Escolhe outra cor da paleta: o card acompanha sem tocar no tema.
+      await tester.ensureVisible(find.byKey(const ValueKey('cor-0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cor-0')));
+      await tester.pumpAndSettle();
+
+      expect(
+        corCard(),
+        Color.lerp(kCoresTemaClaro[0], Colors.white, 0.35),
+      );
+      expect(corCard(), isNot(cardInicial));
+      // O modo (Claro) permanece o mesmo: o botão segue selecionado
+      // (fundo com cor, não transparente).
+      expect(find.byKey(const ValueKey('tema-claro')), findsOneWidget);
+      final bgClaro = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byKey(const ValueKey('tema-claro')),
+          matching: find.byType(AnimatedContainer),
+        ),
+      );
+      expect(
+        (bgClaro.decoration! as BoxDecoration).color,
+        isNot(Colors.transparent),
+      );
     });
   });
 }

@@ -443,7 +443,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final fundoPrevia = _temaClaro ? _cor : kFundoTemaEscuro;
     final onCor = onBackgroundColor(fundoPrevia);
     // Prévia em tempo real: deriva um Theme da seleção atual (cor + modo) e
-    // envolve a tela, para que os highlights (SegmentedButton de tema,
+    // envolve a tela, para que os highlights (seletor de tema,
     // seleção de avatar/cor, botões e barra de rolagem) usem a cor do tema
     // escolhido antes de salvar — igual ao restante do app via buildAppTheme.
     final previaPerfil = _perfilPrevia();
@@ -730,40 +730,102 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     ],
   );
 
-  Widget _escolhaTema(Color onCor) => Column(
-    children: [
-      Text(
-        'Tema',
-        style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
-      ),
-      const SizedBox(height: 12),
-      SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment(
-            value: true,
-            icon: Icon(Icons.light_mode_outlined),
-            label: Text('Tema claro'),
-          ),
-          ButtonSegment(
-            value: false,
-            icon: Icon(Icons.dark_mode_outlined),
-            label: Text('Tema escuro'),
+  void _trocarTema(bool temaClaro) {
+    if (temaClaro == _temaClaro) return;
+    setState(() {
+      _temaClaro = temaClaro;
+      final paleta = _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
+      final origem = _temaClaro ? kCoresTemaEscuro : kCoresTemaClaro;
+      _cor = corNaPaleta(_cor, origem, paleta);
+    });
+  }
+
+  Widget _escolhaTema(Color _) {
+    // Card "Tema": o fundo reage à cor escolhida (tingido com [_cor]),
+    // mas o modo (claro/escuro) só muda tocando em Claro/Escuro — escolher
+    // uma cor apenas converte o tom dentro do tema atual.
+    final isClaro = _temaClaro;
+    final cardColor = isClaro
+        ? (Color.lerp(_cor, Colors.white, 0.35) ?? _cor)
+        : (Color.lerp(_cor, const Color(0xFF101318), 0.30) ?? _cor);
+    final cardText = onBackgroundColor(cardColor);
+    final cardBorder = isClaro
+        ? Colors.black.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.12);
+    final trackColor = isClaro
+        ? Colors.white.withValues(alpha: 0.65)
+        : Colors.black.withValues(alpha: 0.40);
+    final trackBorder = isClaro
+        ? Colors.black.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.10);
+
+    return Container(
+      key: const ValueKey('tema-card'),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cardBorder, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isClaro ? 0.10 : 0.45),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
-        selected: {_temaClaro},
-        onSelectionChanged: (selecao) {
-          final tema = selecao.first;
-          if (tema == _temaClaro) return;
-          setState(() {
-            _temaClaro = tema;
-            final paleta = _temaClaro ? kCoresTemaClaro : kCoresTemaEscuro;
-            final origem = _temaClaro ? kCoresTemaEscuro : kCoresTemaClaro;
-            _cor = corNaPaleta(_cor, origem, paleta);
-          });
-        },
       ),
-    ],
-  );
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Tema',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: cardText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: trackColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: trackBorder, width: 1),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _TemaOption(
+                    key: const ValueKey('tema-claro'),
+                    icon: Icons.wb_sunny_outlined,
+                    label: 'Claro',
+                    selected: isClaro,
+                    temaClaro: isClaro,
+                    cor: _cor,
+                    onTap: () => _trocarTema(true),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _TemaOption(
+                    key: const ValueKey('tema-escuro'),
+                    icon: Icons.dark_mode_outlined,
+                    label: 'Escuro',
+                    selected: !isClaro,
+                    temaClaro: isClaro,
+                    cor: _cor,
+                    onTap: () => _trocarTema(false),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _escolhaCor(Color onCor) => Column(
     children: [
@@ -823,6 +885,104 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     ),
   );
 }
+
+/// Botão Claro/Escuro do seletor de tema (ver imagem de referência).
+///
+/// O botão selecionado acompanha a cor escolhida ([cor]): claro = tom mais
+/// vivo da cor, escuro = a própria cor escura. Cantos arredondados (10),
+/// sombreado e borda clara. Não selecionado: transparente, texto apagado.
+class _TemaOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+
+  /// `true` quando o card está no modo claro (inverte as cores do botão).
+  final bool temaClaro;
+
+  /// Cor de fundo escolhida pelo usuário: tinge o botão selecionado.
+  final Color cor;
+  final VoidCallback onTap;
+
+  const _TemaOption({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.temaClaro,
+    required this.cor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Botão selecionado reage à cor: no claro usa um tom mais vivo da cor
+    // (mistura com a cor de acento do tema); no escuro usa a própria cor.
+    final theme = Theme.of(context);
+    final selectedBg = temaClaro
+        ? Color.lerp(cor, theme.colorScheme.primary, 0.35) ?? cor
+        : cor;
+    final selectedText = onBackgroundColor(selectedBg);
+    // Borda clara acompanhando a cor do botão selecionado.
+    final selectedBorder = temaClaro
+        ? Colors.black.withValues(alpha: 0.06)
+        : Colors.white.withValues(alpha: 0.14);
+    final unselectedText = temaClaro
+        ? Colors.black.withValues(alpha: 0.45)
+        : Colors.white.withValues(alpha: 0.45);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? selectedBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? selectedBorder : Colors.transparent,
+              width: 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: temaClaro ? 0.12 : 0.45,
+                      ),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? selectedText : unselectedText,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 15,
+                  color: selected ? selectedText : unselectedText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 /// Opções do menu aberto ao tocar no avatar.
 enum _OpcaoAvatar { emoji, galeria, camera, ajustar, remover }

@@ -174,5 +174,34 @@ ThemeData buildAppTheme(
       surfaceTintColor: Colors.transparent,
       elevation: 0,
     ),
+    // Botões do app no formato retângulo com cantos arredondados (raio 14),
+    // igual ao seletor de tema da edição de perfil.
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    segmentedButtonTheme: base.segmentedButtonTheme.copyWith(
+      style: base.segmentedButtonTheme.style?.copyWith(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    ),
   );
 }
