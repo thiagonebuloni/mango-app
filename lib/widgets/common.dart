@@ -368,6 +368,21 @@ void showMenuApp(
   );
 }
 
+/// Nome do arquivo de backup CSV: `mango_backup_DDMMYYYYHHmmSS.csv`,
+/// onde a numeração é dia/mês/ano/hora/minuto/segundo (ex.:
+/// `mango_backup_27092026084157.csv` = 27/09/2026 08:41:57).
+String mangoBackupFileName([DateTime? when]) {
+  final now = when ?? DateTime.now();
+  String two(int v) => v.toString().padLeft(2, '0');
+  final dd = two(now.day);
+  final mm = two(now.month);
+  final yyyy = now.year.toString().padLeft(4, '0');
+  final hh = two(now.hour);
+  final mi = two(now.minute);
+  final ss = two(now.second);
+  return 'mango_backup_$dd$mm$yyyy$hh$mi$ss.csv';
+}
+
 /// Exporta os lançamentos em CSV e abre a folha de compartilhamento do
 /// sistema (salvar em arquivos, enviar por e-mail/mensageiro etc.).
 Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
@@ -377,7 +392,7 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
     final csv = CsvBackup.export(expenses);
     final dir = await getTemporaryDirectory();
     final file = File(
-      '${dir.path}/mango_backup_${DateTime.now().millisecondsSinceEpoch}.csv',
+      '${dir.path}/${mangoBackupFileName()}',
     );
     await file.writeAsString(csv, flush: true);
     await SharePlus.instance.share(
