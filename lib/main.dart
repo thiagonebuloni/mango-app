@@ -5,8 +5,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'db/db.dart';
+import 'screens/first_run_screen.dart';
 import 'screens/landing_screen.dart';
-import 'screens/profile_setup_screen.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
 
@@ -59,8 +59,8 @@ class MangoApp extends ConsumerWidget {
 
 /// Decide a primeira tela do app:
 ///
-/// - **primeiro acesso** (nenhum perfil salvo) → cadastro do nome, avatar e
-///   cor de fundo;
+/// - **primeiro acesso** (nenhum perfil salvo) → pergunta se o usuário tem
+///   um arquivo de backup para restaurar ou se quer criar um perfil novo;
 /// - **demais aberturas** → tela inicial com avatar, nome e os botões
 ///   "Meus gastos" e "Menu".
 class ProfileGate extends ConsumerWidget {
@@ -74,7 +74,7 @@ class ProfileGate extends ConsumerWidget {
             body: Center(child: Text('Erro ao carregar o perfil: $e')),
           ),
           data: (perfil) => perfil == null
-              ? const ProfileSetupScreen()
+              ? const FirstRunScreen()
               : const LandingScreen(),
         );
   }

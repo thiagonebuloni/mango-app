@@ -115,7 +115,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _fotoAlignX = (perfil?.avatarAlignX ?? 0).clamp(-1.0, 1.0);
     _fotoAlignY = (perfil?.avatarAlignY ?? 0).clamp(-1.0, 1.0);
     _fotoZoom = (perfil?.avatarZoom ?? 1).clamp(1.0, 3.0);
-    _temaClaro = perfil?.temaClaro ?? true;
+    _temaClaro = perfil?.temaClaro ?? false;
     _cor = Color(
       perfil?.corFundo ??
           (_temaClaro

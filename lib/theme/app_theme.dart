@@ -30,9 +30,8 @@ const List<Color> kCoresTemaEscuro = [
   Color(0xFF33393B), // cinza escuro
 ];
 
-/// Tema ativo no perfil (`true` = claro). Perfis antigos/nulos continuam no
-/// tema claro.
-bool temaClaroDoPerfil(UserProfile? perfil) => perfil?.temaClaro ?? true;
+/// Tema ativo no perfil (`true` = claro). Sem perfil: padrão escuro.
+bool temaClaroDoPerfil(UserProfile? perfil) => perfil?.temaClaro ?? false;
 
 /// Fundo fixo do **tema escuro**: cinza escuro, independente da cor escolhida.
 ///
@@ -66,7 +65,7 @@ Color corNaPaleta(Color cor, List<Color> origem, List<Color> destino) {
 /// nas caixas destacadas (ver [corDestaqueDoPerfil]). E vice-versa: tema
 /// claro com cor da paleta escura volta para o tom claro correspondente.
 Color corFundoDoPerfil(UserProfile? perfil) {
-  if (perfil == null) return const Color(UserProfile.corFundoPadrao);
+  if (perfil == null) return kFundoTemaEscuro;
   final cor = Color(perfil.corFundo);
   if (perfil.temaClaro) {
     final i = _indiceNaPaleta(cor, kCoresTemaEscuro);
@@ -128,7 +127,7 @@ Color acentoDeFundoClaro(Color fundo) {
 /// o tema no perfil repinta todas as telas na hora.
 ThemeData buildAppTheme(
   Color corFundo, {
-  bool temaClaro = true,
+  bool temaClaro = false,
   Color? corAcento,
 }) {
   final seed =

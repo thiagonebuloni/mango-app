@@ -39,13 +39,15 @@ class DBHelper {
 
   /// Perfil do usuário (nome, avatar, cor de fundo e tema): uma única linha.
   /// v5 acrescenta a foto do avatar + posição/zoom do recorte.
+  /// v6 muda o padrão do tema para escuro em bancos novos
+  /// (`tema_claro DEFAULT 0`).
   static const _profileTable = '''
     CREATE TABLE profile (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       nome TEXT NOT NULL,
       avatar TEXT NOT NULL,
       cor INTEGER NOT NULL,
-      tema_claro INTEGER NOT NULL DEFAULT 1,
+      tema_claro INTEGER NOT NULL DEFAULT 0,
       avatar_img TEXT,
       avatar_ax REAL NOT NULL DEFAULT 0,
       avatar_ay REAL NOT NULL DEFAULT 0,
@@ -57,8 +59,10 @@ class DBHelper {
   /// v3 = coluna `tipo` (despesa/receita) em expenses;
   /// v4 = coluna `tema_claro` (tema claro/escuro) em profile;
   /// v5 = foto do avatar (`avatar_img`) + posição/zoom do recorte
-  /// (`avatar_ax`, `avatar_ay`, `avatar_zoom`) em profile.
-  static const _dbVersion = 5;
+  /// (`avatar_ax`, `avatar_ay`, `avatar_zoom`) em profile;
+  /// v6 = padrão do tema passa a escuro em bancos novos
+  /// (`tema_claro DEFAULT 0`).
+  static const _dbVersion = 6;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -79,12 +83,12 @@ class DBHelper {
         }
         if (oldVersion < 4) {
           // Perfis já salvos ganham a coluna do tema sem perder os dados:
-          // quem não escolheu nada continua no tema claro.
+          // quem não escolheu nada cai no padrão atual (escuro).
           final cols = await db.rawQuery('PRAGMA table_info(profile)');
           final temTema = cols.any((c) => c['name'] == 'tema_claro');
           if (!temTema) {
             await db.execute(
-                'ALTER TABLE profile ADD COLUMN tema_claro INTEGER NOT NULL DEFAULT 1');
+                'ALTER TABLE profile ADD COLUMN tema_claro INTEGER NOT NULL DEFAULT 0');
           }
         }
         if (oldVersion < 5) {
@@ -242,7 +246,12 @@ class DBHelper {
   }
 }
 
-/// Backup CSV dos lançamentos (exportar/importar).
+/// Backup CSV dos lançamentos (+ perfil do usuário no topo).
+///
+/// Linhas `#` (ex.: `# MANGO_BACKUP v2` e `# PERFIL;...`) são comentários:
+/// ignoradas por planilhas e por backups antigos. O perfil guarda
+/// `nome/avatar/corFundo (ARGB)/tema (claro|escuro)`; a foto do avatar não
+/// entra no backup (caminho local) e deve ser recolocada na edição final.
 ///
 /// Formato: cabeçalho `tipo;valor;data_hora;categoria;forma;descricao;
 /// estabelecimento;origem` com `;` como separador (padrão BR, abre direto
@@ -252,15 +261,31 @@ class DBHelper {
 class CsvBackup {
   static const header =
       'tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem';
+  static const backupMarker = '# MANGO_BACKUP v2';
+  static const perfilMarker = '# PERFIL;';
 
   static String _esc(String value) =>
       '"${value.replaceAll('"', '""')}"';
 
-  /// Serializa os lançamentos para o texto CSV.
-  static String export(List<Expense> expenses) {
+  /// Serializa os lançamentos para o texto CSV, incluindo [perfil] no topo.
+  static String export(List<Expense> expenses, {UserProfile? perfil}) {
     final sorted = expenses.toList()
       ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
-    final buf = StringBuffer(header);
+    final buf = StringBuffer(backupMarker);
+    if (perfil != null) {
+      buf
+        ..write('\n')
+        ..write(perfilMarker)
+        ..write('nome=')
+        ..write(_esc(perfil.nome))
+        ..write(';avatar=')
+        ..write(_esc(perfil.avatar))
+        ..write(';cor=')
+        ..write(perfil.corFundo)
+        ..write(';tema=')
+        ..write(perfil.temaClaro ? 'claro' : 'escuro');
+    }
+    buf.write('\n$header');
     for (final e in sorted) {
       buf
         ..write('\n')
@@ -283,7 +308,7 @@ class CsvBackup {
     return buf.toString();
   }
 
-  /// Resultado da importação: lançamentos válidos + linhas ignoradas.
+  /// Resultado da importação: lançamentos válidos + perfil + linhas ignoradas.
   static CsvImportResult import(String csvText) {
     final lines = const LineSplitter().convert(csvText.trim());
     if (lines.isEmpty) {
@@ -291,16 +316,78 @@ class CsvBackup {
     }
     final expenses = <Expense>[];
     var skipped = 0;
-    final start = lines.first.trim() == header ? 1 : 0;
-    for (var i = start; i < lines.length; i++) {
-      final expense = _parseLine(lines[i]);
+    UserProfile? perfil;
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      if (line.startsWith('#')) {
+        final parsed = _parsePerfilLine(line);
+        if (parsed != null) perfil = parsed;
+        continue;
+      }
+      if (line == header) continue;
+      final expense = _parseLine(line);
       if (expense == null) {
         skipped++;
       } else {
         expenses.add(expense);
       }
     }
-    return CsvImportResult(expenses: expenses, skipped: skipped);
+    return CsvImportResult(expenses: expenses, skipped: skipped, perfil: perfil);
+  }
+
+  /// Interpreta a linha `# PERFIL;nome=...;avatar=...;cor=...;tema=...`.
+  /// Campos ausentes/inválidos caem nos padrões do app (tema escuro,
+  /// cor escura, nome/avatar padrão). `null` = linha não é de perfil.
+  static UserProfile? _parsePerfilLine(String line) {
+    if (!line.startsWith(perfilMarker)) return null;
+    final resto = line.substring(perfilMarker.length);
+    final campos = _splitPerfilFields(resto);
+    final nome = campos['nome'] ?? '';
+    final avatar = (campos['avatar'] == null || campos['avatar']!.isEmpty)
+        ? UserProfile.avatarPadrao
+        : campos['avatar']!;
+    final cor = int.tryParse((campos['cor'] ?? '').trim()) ??
+        UserProfile.corFundoInicialPadrao;
+    final temaClaro = (campos['tema'] ?? '').trim().toLowerCase() == 'claro';
+    return UserProfile(nome: nome, avatar: avatar, corFundo: cor, temaClaro: temaClaro);
+  }
+
+  /// Quebra `chave=valor;...` respeitando aspas (`;` dentro de `"..."`).
+  static Map<String, String> _splitPerfilFields(String text) {
+    final map = <String, String>{};
+    final buf = StringBuffer();
+    final parts = <String>[];
+    var inQuotes = false;
+    for (var i = 0; i < text.length; i++) {
+      final ch = text[i];
+      if (inQuotes) {
+        if (ch == '"') {
+          if (i + 1 < text.length && text[i + 1] == '"') {
+            buf.write('"');
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          buf.write(ch);
+        }
+      } else if (ch == '"') {
+        inQuotes = true;
+      } else if (ch == ';') {
+        parts.add(buf.toString());
+        buf.clear();
+      } else {
+        buf.write(ch);
+      }
+    }
+    parts.add(buf.toString());
+    for (final part in parts) {
+      final eq = part.indexOf('=');
+      if (eq < 0) continue;
+      map[part.substring(0, eq).trim().toLowerCase()] = part.substring(eq + 1).trim();
+    }
+    return map;
   }
 
   /// Quebra a linha respeitando aspas (`;` dentro de `"..."` não separa).
@@ -359,8 +446,9 @@ class CsvBackup {
 class CsvImportResult {
   final List<Expense> expenses;
   final int skipped;
+  final UserProfile? perfil;
 
-  const CsvImportResult({required this.expenses, required this.skipped});
+  const CsvImportResult({required this.expenses, required this.skipped, this.perfil});
 }
 
 /// Limites de período usados na Home e nos relatórios (semana começa na

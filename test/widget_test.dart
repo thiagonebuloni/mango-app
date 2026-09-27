@@ -28,6 +28,7 @@ const _perfilTeste = UserProfile(
   nome: 'Ana',
   avatar: '🦊',
   corFundo: 0xFFE3F2FD,
+  temaClaro: true,
 );
 
 class _FakeProfileNotifier extends ProfileNotifier {
@@ -447,7 +448,7 @@ void main() async {
   });
 
   group('Primeiro acesso (cadastro do perfil)', () {
-    testWidgets('sem perfil o app abre a tela de cadastro', (tester) async {
+    testWidgets('sem perfil o app pergunta sobre backup', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -458,14 +459,21 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Bem-vindo ao Mango!'), findsOneWidget);
+      expect(find.text('Restaurar backup'), findsOneWidget);
+      expect(find.text('Criar perfil novo'), findsOneWidget);
+      // A tela inicial (landing) só aparece depois do cadastro.
+      expect(find.text('Gastos'), findsNothing);
+      expect(find.text('Relatórios'), findsNothing);
+
+      // Criar novo abre o cadastro de perfil.
+      await tester.tap(find.text('Criar perfil novo'));
+      await tester.pumpAndSettle();
       expect(find.text('Bem-vindo!'), findsOneWidget);
       expect(find.text('Nome do usuário'), findsOneWidget);
       expect(find.text('Escolha seu avatar'), findsOneWidget);
       expect(find.text('Cor de fundo'), findsOneWidget);
       expect(find.text('Começar'), findsOneWidget);
-      // A tela inicial (landing) só aparece depois do cadastro.
-      expect(find.text('Gastos'), findsNothing);
-      expect(find.text('Relatórios'), findsNothing);
     });
 
     testWidgets('salvar nome, avatar e cor abre a tela inicial',
@@ -477,6 +485,10 @@ void main() async {
           child: _makeApp(home: const ProfileGate()),
         ),
       );
+      await tester.pumpAndSettle();
+
+      // Primeiro acesso: passar pelo gate do backup.
+      await tester.tap(find.text('Criar perfil novo'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField), 'Ana');
@@ -493,9 +505,16 @@ void main() async {
 
       expect(notifier.salvo?.nome, 'Ana');
       expect(notifier.salvo?.avatar, kProfileAvatars[8]);
-      expect(notifier.salvo?.corFundo, kProfileColors[1].toARGB32());
+      // Perfil novo usa o tema escuro por padrao.
+      expect(notifier.salvo?.temaClaro, isFalse);
+      expect(notifier.salvo?.corFundo, kProfileColorsEscuro[1].toARGB32());
 
-      // A tela inicial substituiu o cadastro com o que foi escolhido.
+      // Primeiro acesso via gate do backup: o cadastro foi empilhado;
+      // ao salvar, o perfil existe e o gate mostra a landing por baixo.
+      // Sair do cadastro (sem alteracoes pendentes) revela a landing.
+      final navState = tester.state<NavigatorState>(find.byType(Navigator));
+      navState.pop();
+      await tester.pumpAndSettle();
       expect(find.text('Olá, Ana!'), findsOneWidget);
       expect(find.text('Gastos'), findsOneWidget);
       expect(find.text('Relatórios'), findsOneWidget);
@@ -510,6 +529,9 @@ void main() async {
           child: _makeApp(home: const ProfileGate()),
         ),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Criar perfil novo'));
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.text('Começar'));
@@ -530,6 +552,9 @@ void main() async {
           child: _makeApp(home: const ProfileGate()),
         ),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Criar perfil novo'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField), 'Ana');
@@ -570,6 +595,9 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('Criar perfil novo'));
+      await tester.pumpAndSettle();
+
       await tester.tap(find.byKey(const ValueKey('avatar-preview')));
       await tester.pumpAndSettle();
       // O toque no avatar abre o menu (emoticon ou foto): escolher o
@@ -605,6 +633,9 @@ void main() async {
           child: _makeApp(home: const ProfileGate()),
         ),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Criar perfil novo'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('avatar-preview')));

@@ -389,7 +389,8 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
   try {
     final expenses = ref.read(expensesProvider).value ?? const <Expense>[];
-    final csv = CsvBackup.export(expenses);
+    final perfil = ref.read(profileProvider).value;
+    final csv = CsvBackup.export(expenses, perfil: perfil);
     final dir = await getTemporaryDirectory();
     final file = File(
       '${dir.path}/${mangoBackupFileName()}',
@@ -399,7 +400,9 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
       ShareParams(
         files: [XFile(file.path, mimeType: 'text/csv')],
         title: 'Backup Mango',
-        text: 'Backup com ${expenses.length} lançamento(s) do Mango.',
+        text: perfil == null
+            ? 'Backup com ${expenses.length} lançamento(s) do Mango.'
+            : 'Backup com ${expenses.length} lançamento(s) do Mango de ${perfil.nome}.',
       ),
     );
   } catch (e) {
@@ -434,7 +437,7 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     return;
   }
   final result = CsvBackup.import(texto);
-  if (result.expenses.isEmpty) {
+  if (result.expenses.isEmpty && result.perfil == null) {
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Nenhum lançamento válido encontrado no arquivo'),
@@ -443,6 +446,9 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     return;
   }
   if (!context.mounted) return;
+  final perfilMsg = result.perfil == null
+      ? ''
+      : ' Perfil de ${result.perfil!.nome} (tema ${result.perfil!.temaClaro ? 'claro' : 'escuro'}) também será restaurado.';
   final confirmado = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -450,7 +456,7 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
       content: Text(
         'Os ${result.expenses.length} lançamento(s) do CSV serão somados '
         'aos já existentes. Duplicatas são ignoradas e nenhum registro '
-        'do aparelho é apagado.',
+        'do aparelho é apagado.$perfilMsg',
       ),
       actions: [
         TextButton(
@@ -465,6 +471,9 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     ),
   );
   if (confirmado != true) return;
+  if (result.perfil != null) {
+    await ref.read(profileProvider.notifier).save(result.perfil!);
+  }
   final adicionados =
       await ref.read(expensesProvider.notifier).mergeAll(result.expenses);
   final duplicados = result.expenses.length - adicionados;

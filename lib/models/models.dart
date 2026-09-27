@@ -304,7 +304,7 @@ class UserProfile {
   /// ([avatarImagePath] == null) ou a foto não pode ser lida.
   final String avatar;
   final int corFundo; // cor de fundo da tela inicial, em ARGB
-  /// `true` = tema claro; `false` = tema escuro.
+  /// `true` = tema claro; `false` = tema escuro (padrão do app).
   final bool temaClaro;
   /// Caminho local da foto do avatar (cópia dentro dos documentos do app).
   /// `null` = usar o emoticon [avatar].
@@ -319,7 +319,7 @@ class UserProfile {
     required this.nome,
     required this.avatar,
     required this.corFundo,
-    this.temaClaro = true,
+    this.temaClaro = false,
     this.avatarImagePath,
     this.avatarAlignX = 0,
     this.avatarAlignY = 0,
@@ -330,6 +330,8 @@ class UserProfile {
   static const String avatarPadrao = '🐸';
   static const int corFundoPadrao = 0xFFE0F2F1;
   static const int corFundoEscuroPadrao = 0xFF33393B;
+  /// Cor de fundo padrão do app (tema escuro).
+  static const int corFundoInicialPadrao = corFundoEscuroPadrao;
 
   /// `true` quando há uma foto de avatar para exibir em vez do emoticon.
   bool get temFoto =>
@@ -372,11 +374,11 @@ class UserProfile {
   static UserProfile fromMap(Map<String, Object?> map) => UserProfile(
         nome: (map['nome'] as String?) ?? '',
         avatar: (map['avatar'] as String?) ?? avatarPadrao,
-        corFundo: (map['cor'] as int?) ?? corFundoPadrao,
+        corFundo: (map['cor'] as int?) ?? corFundoInicialPadrao,
         temaClaro: switch (map['tema_claro']) {
           final int v => v != 0,
           final bool v => v,
-          _ => true, // perfis antigos: continuam no tema claro
+          _ => false, // perfis antigos sem tema: passam ao padrão escuro
         },
         avatarImagePath: (map['avatar_img'] as String?)?.trim().isEmpty ?? true
             ? null
