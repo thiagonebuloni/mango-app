@@ -265,6 +265,34 @@ void main() async {
       // O diálogo do showDatePicker deve aparecer.
       expect(find.byType(DatePickerDialog), findsOneWidget);
     });
+
+    testWidgets('aviso de parcelas aparece integral e centralizado',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+          ],
+          child: _makeApp(home: const ExpenseFormScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Valor total de R$ 100,00 em 2x: o aviso mostra 2x R$ 50,00.
+      await tester.enterText(find.byType(TextFormField).first, '100,00');
+      await tester.enterText(
+          find.byType(TextFormField).at(1), 'LOJA XYZ 1/2');
+      await tester.pump();
+
+      final aviso = find.textContaining('Serão criados 2 lançamentos');
+      expect(aviso, findsOneWidget);
+      final texto = tester.widget<Text>(aviso);
+      expect(texto.textAlign, TextAlign.center);
+      // Sem corte: texto em até 3 linhas, sem overflow.
+      expect(texto.maxLines, isNull);
+      expect(texto.overflow, isNull);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('ReportsScreen (barra de períodos)', () {

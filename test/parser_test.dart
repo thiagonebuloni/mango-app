@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/services/categorizer.dart';
 import 'package:mango/services/receipt_parser.dart';
+import 'package:mango/state/providers.dart';
 
 const satCupom = '''
 SISTEMA AUTENTICADOR E TRANSMISSOR DE CUPOM FISCAL
@@ -152,6 +153,58 @@ VALOR TOTAL R\$ 12,00
           'TOTAL R\$ 8,00\n20/03/2026 10:00';
       expect(ReceiptParser.parse(text).dataHora, DateTime(2026, 3, 20, 10));
     });
+
+    test('detecta "PARCELA 2/10": sufixo no nome + Crédito', () {
+      const text = 'LOJA XYZ\nCNPJ 00.111.222/0001-33\n'
+          'PARCELA 02/10\nTOTAL R\$ 100,00\nCARTAO DE CREDITO R\$ 100,00';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.estabelecimento, 'LOJA XYZ 2/10');
+      expect(draft.pagamento, PaymentMethod.credito);
+    });
+
+    test('detecta "PARCELA 2 DE 10"', () {
+      const text = 'LOJA XYZ\nCNPJ 00.111.222/0001-33\n'
+          'PARCELA 2 DE 10\nTOTAL R\$ 100,00';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.estabelecimento, 'LOJA XYZ 2/10');
+      expect(draft.pagamento, PaymentMethod.credito);
+    });
+
+    test('"EM 10X" assume a 1ª parcela', () {
+      const text = 'LOJA XYZ\nCNPJ 00.111.222/0001-33\n'
+          'CREDITO EM 10X\nTOTAL R\$ 500,00';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.estabelecimento, 'LOJA XYZ 1/10');
+      expect(draft.pagamento, PaymentMethod.credito);
+    });
+
+    test('força Crédito mesmo sem a palavra "credito" legível', () {
+      const text = 'LOJA XYZ\nCNPJ 00.111.222/0001-33\n'
+          'PARCELA 01/03\nTOTAL R\$ 90,00';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.estabelecimento, 'LOJA XYZ 1/3');
+      expect(draft.pagamento, PaymentMethod.credito);
+    });
+
+    test('data "20/03/2026" não vira parcela', () {
+      const text = 'LOJA TESTE\nCNPJ 00.111.222/0001-33\nDATA 20/03/2026\n'
+          'TOTAL R\$ 5,00';
+      final draft = ReceiptParser.parse(text);
+      expect(draft.estabelecimento, 'LOJA TESTE');
+      expect(ReceiptParser.parcelas(text), isNull);
+    });
+
+    test('"A VISTA" não vira parcela', () {
+      const text = 'LOJA TESTE\nTOTAL R\$ 40,00\nA VISTA R\$ 40,00';
+      expect(ReceiptParser.parcelas(text), isNull);
+    });
+
+    test('normaliza estabelecimento ignorando o sufixo de parcela', () {
+      expect(
+        ReceiptParser.normalizeMerchant('Loja XYZ 2/10'),
+        'loja xyz',
+      );
+    });
   });
 
   group('Categorizer (regras locais)', () {
@@ -192,6 +245,87 @@ VALOR TOTAL R\$ 12,00
         text: 'pao cafe',
       );
       expect(result, Category.transporte);
+    });
+  });
+
+  group('Parcelas (x/y + expansão mensal)', () {
+    Expense gastoBase({
+      required String estabelecimento,
+      required int centavos,
+      required DateTime data,
+    }) =>
+        Expense(
+          valorCentavos: centavos,
+          dataHora: data,
+          categoria: Category.outros,
+          forma: PaymentMethod.credito,
+          estabelecimento: estabelecimento,
+        );
+
+    test('R\$ 100,00 em 2x vira 2 lançamentos de R\$ 50,00', () {
+      final lista = expandirParcelas(gastoBase(
+        estabelecimento: 'LOJA XYZ 1/2',
+        centavos: 10000,
+        data: DateTime(2026, 3, 20, 14, 30),
+      ));
+      expect(lista.length, 2);
+      expect(lista[0].estabelecimento, 'LOJA XYZ 1/2');
+      expect(lista[1].estabelecimento, 'LOJA XYZ 2/2');
+      expect(lista[0].valorCentavos, 5000);
+      expect(lista[1].valorCentavos, 5000);
+      expect(lista[0].dataHora, DateTime(2026, 3, 20, 14, 30));
+      expect(lista[1].dataHora, DateTime(2026, 4, 20, 14, 30));
+    });
+
+    test('soma das parcelas bate com o total (resto na 1ª)', () {
+      final lista = expandirParcelas(gastoBase(
+        estabelecimento: 'LOJA XYZ 1/3',
+        centavos: 10000,
+        data: DateTime(2026, 3, 20),
+      ));
+      expect(lista.length, 3);
+      final soma = lista.fold<int>(0, (t, e) => t + e.valorCentavos);
+      expect(soma, 10000);
+      // 10000 = 3334 + 3333 + 3333
+      expect(lista[0].valorCentavos, 3334);
+      expect(lista[1].valorCentavos, 3333);
+      expect(lista[2].valorCentavos, 3333);
+    });
+
+    test('a partir da 2/10 cria só as 9 restantes', () {
+      final lista = expandirParcelas(gastoBase(
+        estabelecimento: 'LOJA XYZ 2/10',
+        centavos: 9000,
+        data: DateTime(2026, 3, 20),
+      ));
+      expect(lista.length, 9);
+      expect(lista.first.estabelecimento, 'LOJA XYZ 2/10');
+      expect(lista.last.estabelecimento, 'LOJA XYZ 10/10');
+      expect(lista.last.dataHora.month, 11);
+    });
+
+    test('última parcela (y/y) não expande', () {
+      final lista = expandirParcelas(gastoBase(
+        estabelecimento: 'LOJA XYZ 10/10',
+        centavos: 1000,
+        data: DateTime(2026, 3, 20),
+      ));
+      expect(lista.length, 1);
+    });
+
+    test('sem sufixo não expande', () {
+      final lista = expandirParcelas(gastoBase(
+        estabelecimento: 'LOJA XYZ',
+        centavos: 1000,
+        data: DateTime(2026, 3, 20),
+      ));
+      expect(lista.length, 1);
+    });
+
+    test('addMonths trava no último dia do mês (31/01 → 28/02)', () {
+      expect(addMonths(DateTime(2026, 1, 31), 1), DateTime(2026, 2, 28));
+      expect(addMonths(DateTime(2026, 3, 20, 14, 30), 2),
+          DateTime(2026, 5, 20, 14, 30));
     });
   });
 }

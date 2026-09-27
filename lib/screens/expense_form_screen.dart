@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
+import '../services/receipt_parser.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 
@@ -74,6 +75,28 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     return _padraoPara(widget.tipoInicial);
   }
   bool _saving = false;
+
+  /// Aviso sob o campo estabelecimento quando há sufixo "x/y": quantos
+  /// lançamentos mensais serão criados e com qual valor. Exibido em caixa
+  /// própria (largura total, texto centralizado e com quebra de linha) para
+  /// nunca ser cortado pelo fim da tela.
+  String? get _parcelaAviso {
+    if (_isEdit) return null;
+    final parcela =
+        ReceiptParser.parseParcelaSuffix(_estabelecimento.text.trim());
+    if (parcela == null || parcela.atual >= parcela.total) return null;
+    final restantes = parcela.total - parcela.atual + 1;
+    final centavos = parseMoneyInput(_valor.text);
+    if (centavos == null) {
+      return 'Serão criados $restantes lançamentos mensais '
+          '(${parcela.atual}/${parcela.total} até '
+          '${parcela.total}/${parcela.total}), um por mês.';
+    }
+    final porParcela = centavos ~/ restantes;
+    return 'Serão criados $restantes lançamentos mensais de '
+        '${formatBRL(porParcela)} (${parcela.atual}/${parcela.total} até '
+        '${parcela.total}/${parcela.total}), um por mês.';
+  }
 
   bool get hasUnsavedChanges {
     final e = widget.expense;
@@ -175,13 +198,27 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     );
 
     final notifier = ref.read(expensesProvider.notifier);
+    int criados = 1;
     if (_isEdit) {
       await notifier.edit(novo);
     } else {
-      await notifier.add(novo);
+      criados = await notifier.add(novo);
     }
     if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
+    // Aviso de parcelas criadas: aparece na tela anterior (Home).
+    if (!_isEdit && criados > 1) {
+      final parcela = ReceiptParser.parseParcelaSuffix(novo.estabelecimento);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Parcela ${parcela!.atual}/${parcela.total} salva: '
+            'valor dividido em $criados lançamentos mensais.',
+          ),
+        ),
+      );
+    }
   }
 
   Expense _buildNew() {
@@ -321,6 +358,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                         ? 'Informe o valor'
                         : null,
                 autofocus: !_isEdit && d == null,
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -328,7 +366,30 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 decoration: InputDecoration(
                     labelText: _isReceita ? 'Origem' : 'Estabelecimento'),
                 textCapitalization: TextCapitalization.words,
+                onChanged: (_) => setState(() {}),
               ),
+              if (_parcelaAviso != null) ...[
+                const SizedBox(height: 8),
+                Builder(
+                  builder: (context) {
+                    final primary = Theme.of(context).colorScheme.primary;
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _parcelaAviso!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: primary),
+                      ),
+                    );
+                  },
+                ),
+              ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: _descricao,

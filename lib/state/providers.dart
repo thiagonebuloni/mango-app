@@ -14,14 +14,22 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
     state = AsyncData(await DBHelper.instance.allExpenses());
   }
 
-  Future<void> add(Expense expense) async {
-    await DBHelper.instance.insertExpense(expense);
+  Future<int> add(Expense expense) async {
+    // Estabelecimento com sufixo "x/y" (ex.: "LOJA 2/10"): divide o valor
+    // total entre as parcelas restantes e cria uma cópia por mês.
+    final parcelas = expandirParcelas(expense);
+    if (parcelas.length == 1) {
+      await DBHelper.instance.insertExpense(expense);
+    } else {
+      await DBHelper.instance.insertExpensesBatch(parcelas);
+    }
     if (expense.estabelecimento.trim().isNotEmpty) {
       await DBHelper.instance.memorizeMerchant(
               ReceiptParser.normalizeMerchant(expense.estabelecimento),
               expense.categoria);
     }
     await _reload();
+    return parcelas.length;
   }
 
   /// Edita um gasto existente ("update" colide com a API do AsyncNotifier).
@@ -59,6 +67,64 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
     await _reload();
     return novos.length;
   }
+}
+
+/// Expande um lançamento parcelado ("LOJA 2/10") na lista de lançamentos
+/// mensais: o valor total informado é dividido entre as parcelas restantes
+/// (x..y), cada uma caindo no mesmo dia dos meses seguintes.
+///
+/// Sem sufixo "x/y" válido (ou última parcela `y/y`): retorna só [base].
+/// Função pura (sem banco) para facilitar testes.
+List<Expense> expandirParcelas(Expense base) {
+  final parcela =
+      ReceiptParser.parseParcelaSuffix(base.estabelecimento.trim());
+  if (parcela == null || parcela.atual >= parcela.total) return [base];
+  final nomeBase = ReceiptParser.stripParcelaSuffix(base.estabelecimento);
+  final restantes = parcela.total - parcela.atual + 1;
+  // Divisão inteira em centavos: o resto (0..restantes-1 centavos) fica
+  // todo na parcela atual para a soma bater exatamente com o total.
+  final valorParcela = base.valorCentavos ~/ restantes;
+  final resto = base.valorCentavos - valorParcela * restantes;
+  final lista = <Expense>[];
+  for (var i = 0; i < restantes; i++) {
+    final numero = parcela.atual + i;
+    final atual = base.copyWith(
+      id: null,
+      valorCentavos: valorParcela + (i == 0 ? resto : 0),
+      dataHora: addMonths(base.dataHora, i),
+      estabelecimento: '$nomeBase $numero/${parcela.total}',
+    );
+    // Só a parcela atual guarda a foto do cupom; as futuras são projeções
+    // (`copyWith` não limpa `fotoPath`, então reconstrói sem a foto).
+    lista.add(i == 0
+        ? atual
+        : Expense(
+            valorCentavos: atual.valorCentavos,
+            dataHora: atual.dataHora,
+            categoria: atual.categoria,
+            forma: atual.forma,
+            descricao: atual.descricao,
+            estabelecimento: atual.estabelecimento,
+            origem: atual.origem,
+            tipo: atual.tipo,
+            fotoPath: null,
+            rawText: atual.rawText,
+          ));
+  }
+  return lista;
+}
+
+/// Soma [meses] a [data] preservando dia/hora; trava no último dia do mês
+/// (ex.: 31/01 + 1 mês = 28/02).
+DateTime addMonths(DateTime data, int meses) {
+  if (meses == 0) return data;
+  final totalMeses = (data.month - 1) + meses;
+  final ano = data.year + totalMeses ~/ 12;
+  final mes = totalMeses % 12 + 1;
+  final ultimoDia = DateTime(ano, mes + 1, 0).day;
+  final dia = data.day > ultimoDia ? ultimoDia : data.day;
+  return DateTime(
+      ano, mes, dia, data.hour, data.minute, data.second, data.millisecond);
 }
 
 final expensesProvider =

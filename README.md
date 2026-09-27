@@ -14,7 +14,15 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
   pagamento de cupons SAT/NFC-e brasileiros. A data do gasto é escolhida
   priorizando linhas de emissão/venda/cupom (ignorando validade/vencimento e
   aceitando a hora na linha de baixo) e **"À VISTA"** é interpretado como
-  **Dinheiro**.
+  **Dinheiro**. Se o cupom for **parcelado** (`PARCELA 2/10`, `2 DE 10`,
+  `EM 10X`), o estabelecimento sai como `LOJA XYZ 2/10` e a forma de
+  pagamento é forçada para **Crédito**.
+- **Parcelas:** ao salvar um lançamento com sufixo `x/y` no estabelecimento
+  (ex.: `LOJA XYZ 1/10`, seja via cupom ou digitação manual), o valor total
+  é **dividido** entre as parcelas restantes e uma cópia (`2/10`, `3/10`...)
+  é criada para o mesmo dia dos meses seguintes (`lib/state/providers.dart` →
+  `expandirParcelas`). A memória de categoria ignora o sufixo, então
+  `LOJA 1/10` e `LOJA 2/10` contam como o mesmo estabelecimento.
 - **Categorização:** regras por palavra-chave + **memória por estabelecimento**
   (o app aprende quando você corrige a categoria).
 - **Confirmação humana:** o app nunca grava direto da foto — o formulário abre
@@ -49,7 +57,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 40 testes (parser do cupom + categorizador + UI)
+flutter test      # 68 testes (parser do cupom + parcelas + categorizador + UI)
 ```
 
 ## Rodando o app

@@ -13,8 +13,22 @@
 //     Fallback: maior valor monetário do texto.
 //   - Forma de pagamento: palavras-chave (DINHEIRO, DÉBITO, CRÉDITO, PIX) e
 //     "À VISTA" (quando não há cartão no cupom) → DINHEIRO.
+//   - Parcelas: "PARCELA x/y", "x DE y", "EM Nx" (ex.: 2/10, 2 DE 10,
+//     10X). Quando detectadas, o estabelecimento sai como "LOJA 2/10" e
+//     a forma de pagamento é forçada para CRÉDITO (parcelado é cartão).
 
 import '../models/models.dart';
+
+/// Parcela detectada num cupom: [atual] de [total] (ex.: 2 de 10).
+class ParcelaInfo {
+  final int atual;
+  final int total;
+
+  const ParcelaInfo(this.atual, this.total);
+
+  @override
+  String toString() => '$atual/$total';
+}
 
 class ReceiptParser {
   /// Valores monetários no formato brasileiro: 1.234,56 ou 12,34.
@@ -68,11 +82,21 @@ class ReceiptParser {
         .where((l) => l.isNotEmpty)
         .toList();
 
+    final parcela = parcelas(text);
+    var merchant = _merchant(lines);
+    if (parcela != null && merchant != null) {
+      merchant = withParcelaSuffix(merchant, parcela);
+    }
+    var pagamento = _paymentMethod(text);
+    // Compra parcelada é sempre no cartão de crédito: força o valor mesmo
+    // que o cupom não traga a palavra "crédito" de forma legível.
+    if (parcela != null) pagamento = PaymentMethod.credito;
+
     return ReceiptDraft(
-      estabelecimento: _merchant(lines),
+      estabelecimento: merchant,
       dataHora: _dateTimeFrom(lines),
       totalCentavos: _total(lines),
-      pagamento: _paymentMethod(text),
+      pagamento: pagamento,
       itens: _items(lines),
       textoOcr: text,
     );
@@ -258,6 +282,127 @@ class ReceiptParser {
     return null;
   }
 
+  /// Total máximo de parcelas aceito (trava contra leitura errada do OCR).
+  static const maxParcelas = 60;
+
+  /// Detecta compra parcelada no texto do cupom (ex.: "PARCELA 2/10",
+  /// "PARCELA 2 DE 10", "EM 10X"). Retorna `null` quando não há parcelamento.
+  static ParcelaInfo? parcelas(String text) {
+    final lines = text
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    ParcelaInfo? best;
+    for (var i = 0; i < lines.length; i++) {
+      final found = _parcelaInLine(lines, i);
+      if (found == null) continue;
+      if (best == null || found.total > best.total) best = found;
+    }
+    return best;
+  }
+
+  static final RegExp _parcelaXY = RegExp(r'\b(\d{1,3})\s*/\s*(\d{1,3})\b');
+  static final RegExp _parcelaDe = RegExp(r'\b(\d{1,3})\s+de\s+(\d{1,3})\b');
+  static final RegExp _parcelaVezes =
+      RegExp(r'\bem\s+(\d{1,3})\s*x\b|\b(\d{1,3})\s*x\b|\b(\d{1,3})\s*vezes\b');
+
+  /// Palavras que caracterizam parcelamento (texto já sem acento).
+  static final RegExp _parcelaHints =
+      RegExp(r'(parc|prest|vezes|credito|cartao)');
+
+  static ParcelaInfo? _parcelaInLine(List<String> lines, int index) {
+    final raw = lines[index];
+    final folded = _fold(raw);
+    // 1) "PARCELA 2/10" ou "2/10" com contexto de parcela por perto.
+    for (final m in _parcelaXY.allMatches(raw)) {
+      final x = int.tryParse(m.group(1)!);
+      final y = int.tryParse(m.group(2)!);
+      if (!_parcelaValida(x, y)) continue;
+      if (_pareceData(raw, m)) continue;
+      if (_temContextoParcela(lines, index, folded)) {
+        return ParcelaInfo(x!, y!);
+      }
+    }
+    // 2) "PARCELA 2 DE 10" / "PRESTACAO 2 DE 10" (busca no texto dobrado:
+    // cupons vêm em maiúsculas e o "DE" precisa casar sem case).
+    for (final m in _parcelaDe.allMatches(folded)) {
+      final x = int.tryParse(m.group(1)!);
+      final y = int.tryParse(m.group(2)!);
+      if (!_parcelaValida(x, y)) continue;
+      if (_parcelaHints.hasMatch(folded) || folded.contains('de')) {
+        return ParcelaInfo(x!, y!);
+      }
+    }
+    // 3) "EM 10X" / "10 VEZES": total sem parcela atual — assume a 1ª.
+    final mv = _parcelaVezes.firstMatch(folded);
+    if (mv != null) {
+      final y = int.tryParse(mv.group(1) ?? mv.group(2) ?? mv.group(3)!);
+      if (_parcelaValida(1, y)) return ParcelaInfo(1, y!);
+    }
+    return null;
+  }
+
+  static bool _parcelaValida(int? x, int? y) {
+    if (x == null || y == null) return false;
+    if (y < 2 || y > maxParcelas) return false;
+    if (x < 1 || x > y) return false;
+    return true;
+  }
+
+  /// `true` se o match `x/y` parece parte de uma data (ano logo depois ou
+  /// data válida na linha sem palavra de parcela explícita).
+  static bool _pareceData(String line, Match m) {
+    final after = line.substring(m.end);
+    // Ano colado: "20/03/2026" → after começa com "/2026".
+    if (RegExp(r'^\s*[/.\-]\s*\d{2,4}\b').hasMatch(after)) return true;
+    if (_date.hasMatch(line)) {
+      final folded = _fold(line);
+      if (!folded.contains('parc') && !folded.contains('prest')) return true;
+    }
+    return false;
+  }
+
+  /// Contexto de parcela: palavra-chave na mesma linha ou nas vizinhas
+  /// (o OCR às vezes quebra "PARCELA" e "2/10" em linhas distintas).
+  static bool _temContextoParcela(
+      List<String> lines, int index, String foldedLine) {
+    if (_parcelaHints.hasMatch(foldedLine) || foldedLine.contains(' x')) {
+      return true;
+    }
+    for (final j in [index - 1, index + 1]) {
+      if (j < 0 || j >= lines.length) continue;
+      if (_parcelaHints.hasMatch(_fold(lines[j]))) return true;
+    }
+    return false;
+  }
+
+  /// Sufixo canônico de parcela: "LOJA XYZ 2/10" (não duplica se já houver).
+  static String withParcelaSuffix(String merchant, ParcelaInfo parcela) {
+    final base = merchant.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (parseParcelaSuffix(base) != null) return base;
+    return '$base ${parcela.atual}/${parcela.total}';
+  }
+
+  /// Lê o sufixo "x/y" do fim do estabelecimento ("LOJA XYZ 2/10").
+  static ParcelaInfo? parseParcelaSuffix(String estabelecimento) {
+    final m =
+        RegExp(r'\b(\d{1,3})\s*/\s*(\d{1,3})\s*$').firstMatch(estabelecimento);
+    if (m == null) return null;
+    final x = int.tryParse(m.group(1)!);
+    final y = int.tryParse(m.group(2)!);
+    if (!_parcelaValida(x, y)) return null;
+    return ParcelaInfo(x!, y!);
+  }
+
+  /// Nome base sem o sufixo "x/y" (memória de categoria e cópias futuras).
+  static String stripParcelaSuffix(String estabelecimento) {
+    return estabelecimento
+        .replaceAll(RegExp(r'\s*\b\d{1,3}\s*/\s*\d{1,3}\s*$'), '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
   static List<ReceiptItem> _items(List<String> lines) {
     const excluded = [
       'total',
@@ -287,10 +432,12 @@ class ReceiptParser {
   }
 
   /// Normaliza o nome de um estabelecimento para uso como chave de memória
-  /// (tabela `merchants`): minúsculas, sem pontuação/CNPJ/acentos.
+  /// (tabela `merchants`): minúsculas, sem sufixo de parcela "x/y",
+  /// sem pontuação/CNPJ/acentos.
   static String normalizeMerchant(String merchant) {
+    final semParcela = stripParcelaSuffix(merchant);
     final folded =
-        _fold(merchant).replaceAll(RegExp(r'cnpj\s*:?\s*[\d.\-/]+'), '');
+        _fold(semParcela).replaceAll(RegExp(r'cnpj\s*:?\s*[\d.\-/]+'), '');
     return folded
         .replaceAll(RegExp(r'[^a-z0-9 ]'), '')
         .trim()
