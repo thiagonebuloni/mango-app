@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:financ/models/models.dart';
-import 'package:financ/services/categorizer.dart';
-import 'package:financ/services/receipt_parser.dart';
+import 'package:mango/models/models.dart';
+import 'package:mango/services/categorizer.dart';
+import 'package:mango/services/receipt_parser.dart';
 
 const satCupom = '''
 SISTEMA AUTENTICADOR E TRANSMISSOR DE CUPOM FISCAL

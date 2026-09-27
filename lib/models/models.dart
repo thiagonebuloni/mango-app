@@ -1,4 +1,4 @@
-// Modelos de domínio do app Financ.
+// Modelos de domínio do app Mango.
 
 /// Categorias de lançamento (pré-definidas para manter o app leve e simples).
 ///

@@ -1,4 +1,4 @@
-package br.com.financ.financ
+package br.com.mango.mango
 
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
@@ -10,7 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val channelName = "financ/ocr"
+    private val channelName = "mango/ocr"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

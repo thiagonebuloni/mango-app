@@ -62,7 +62,7 @@ class DBHelper {
 
   Future<void> init() async {
     if (_db != null) return;
-    final path = join(await getDatabasesPath(), 'financ.db');
+    final path = join(await getDatabasesPath(), 'mango.db');
     _db = await openDatabase(
       path,
       version: _dbVersion,

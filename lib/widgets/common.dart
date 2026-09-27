@@ -355,7 +355,7 @@ void showMenuApp(
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('Sobre o Financ'),
+              title: const Text('Sobre o Mango'),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _sobre(context);
@@ -377,14 +377,14 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
     final csv = CsvBackup.export(expenses);
     final dir = await getTemporaryDirectory();
     final file = File(
-      '${dir.path}/financ_backup_${DateTime.now().millisecondsSinceEpoch}.csv',
+      '${dir.path}/mango_backup_${DateTime.now().millisecondsSinceEpoch}.csv',
     );
     await file.writeAsString(csv, flush: true);
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'text/csv')],
-        title: 'Backup Financ',
-        text: 'Backup com ${expenses.length} lançamento(s) do Financ.',
+        title: 'Backup Mango',
+        text: 'Backup com ${expenses.length} lançamento(s) do Mango.',
       ),
     );
   } catch (e) {
@@ -469,7 +469,7 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
 void _sobre(BuildContext context) {
   showAboutDialog(
     context: context,
-    applicationName: 'Financ',
+    applicationName: 'Mango',
     applicationVersion: '1.0.0',
     applicationIcon: const Icon(Icons.account_balance_wallet, size: 40),
     children: const [

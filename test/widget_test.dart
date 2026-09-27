@@ -9,19 +9,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'package:financ/db/db.dart';
-import 'package:financ/main.dart';
-import 'package:financ/models/models.dart';
-import 'package:financ/screens/capture_screen.dart';
-import 'package:financ/screens/expense_form_screen.dart';
-import 'package:financ/screens/home_screen.dart';
-import 'package:financ/screens/landing_screen.dart';
-import 'package:financ/screens/profile_setup_screen.dart';
-import 'package:financ/screens/reports_screen.dart';
-import 'package:financ/state/providers.dart';
-import 'package:financ/theme/app_theme.dart';
-import 'package:financ/widgets/avatar.dart';
-import 'package:financ/widgets/common.dart';
+import 'package:mango/db/db.dart';
+import 'package:mango/main.dart';
+import 'package:mango/models/models.dart';
+import 'package:mango/screens/capture_screen.dart';
+import 'package:mango/screens/expense_form_screen.dart';
+import 'package:mango/screens/home_screen.dart';
+import 'package:mango/screens/landing_screen.dart';
+import 'package:mango/screens/profile_setup_screen.dart';
+import 'package:mango/screens/reports_screen.dart';
+import 'package:mango/state/providers.dart';
+import 'package:mango/theme/app_theme.dart';
+import 'package:mango/widgets/avatar.dart';
+import 'package:mango/widgets/common.dart';
 
 /// Perfil já cadastrado (casos de "demais aberturas" do app).
 const _perfilTeste = UserProfile(
@@ -732,7 +732,7 @@ void main() async {
       expect(find.text('Editar perfil'), findsOneWidget);
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Importar em CSV'), findsOneWidget);
-      expect(find.text('Sobre o Financ'), findsOneWidget);
+      expect(find.text('Sobre o Mango'), findsOneWidget);
     });
 
     testWidgets('telas Gastos e Relatórios têm ícone de menu no AppBar',
@@ -767,7 +767,7 @@ void main() async {
       expect(find.text('Editar perfil'), findsOneWidget);
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Importar em CSV'), findsOneWidget);
-      expect(find.text('Sobre o Financ'), findsOneWidget);
+      expect(find.text('Sobre o Mango'), findsOneWidget);
 
       // Fecha o sheet antes de trocar de tela: o scrim dele bloquearia o
       // tap no ícone de menu da próxima tela.
@@ -796,7 +796,7 @@ void main() async {
       expect(find.text('Relatórios'), findsOneWidget);
       expect(find.text('Editar perfil'), findsOneWidget);
       expect(find.text('Exportar em CSV'), findsOneWidget);
-      expect(find.text('Sobre o Financ'), findsOneWidget);
+      expect(find.text('Sobre o Mango'), findsOneWidget);
     });
 
 
@@ -889,7 +889,7 @@ void main() async {
             expensesForReportsProvider
                 .overrideWith(() => _FakeReportsNotifier()),
           ],
-          child: const FinancApp(),
+          child: const MangoApp(),
         ),
       );
       await tester.pumpAndSettle();
@@ -942,7 +942,7 @@ void main() async {
             perfilInicialProvider.overrideWithValue(_perfilTeste),
             profileProvider.overrideWith(() => _LentoProfileNotifier()),
           ],
-          child: const FinancApp(),
+          child: const MangoApp(),
         ),
       );
       await tester.pump(); // 1º frame: profileProvider ainda carregando
@@ -1028,7 +1028,7 @@ void main() async {
             expensesForReportsProvider
                 .overrideWith(() => _FakeReportsNotifier()),
           ],
-          child: const FinancApp(),
+          child: const MangoApp(),
         ),
       );
       await tester.pumpAndSettle();

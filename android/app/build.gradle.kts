@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "br.com.financ.financ"
+    namespace = "br.com.mango.mango"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "br.com.financ.financ"
+        applicationId = "br.com.mango.mango"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -42,7 +42,7 @@ flutter {
 }
 
 // ML Kit: somente o reconhecedor latino (leve). O canal nativo
-// (financ/ocr em MainActivity.kt) faz o OCR direto, sem plugin.
+// (mango/ocr em MainActivity.kt) faz o OCR direto, sem plugin.
 dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
 }

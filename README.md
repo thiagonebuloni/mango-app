@@ -1,4 +1,4 @@
-# Financ
+# Mango
 
 App mobile (Flutter) para registrar gastos, organizá-los em categorias e somar
 total **diário, semanal e mensal**. Cada gasto pode ser digitado manualmente ou

@@ -21,13 +21,13 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [perfilInicialProvider.overrideWithValue(perfil)],
-      child: const FinancApp(),
+      child: const MangoApp(),
     ),
   );
 }
 
-class FinancApp extends ConsumerWidget {
-  const FinancApp({super.key});
+class MangoApp extends ConsumerWidget {
+  const MangoApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,7 +38,7 @@ class FinancApp extends ConsumerWidget {
         ref.watch(profileProvider).value ?? ref.watch(perfilInicialProvider);
 
     return MaterialApp(
-      title: 'Financ',
+      title: 'Mango',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(
         corFundoDoPerfil(perfil),

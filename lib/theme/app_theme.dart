@@ -124,7 +124,7 @@ Color acentoDeFundoClaro(Color fundo) {
 /// [corAcentoDoPerfil]: passe `corAcento` quando o tema claro usa um tom
 /// saturado em vez do fundo pastel.
 ///
-/// É aplicado em `MaterialApp.theme` (ver `FinancApp`), então trocar a cor ou
+/// É aplicado em `MaterialApp.theme` (ver `MangoApp`), então trocar a cor ou
 /// o tema no perfil repinta todas as telas na hora.
 ThemeData buildAppTheme(
   Color corFundo, {
