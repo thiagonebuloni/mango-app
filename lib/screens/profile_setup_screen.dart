@@ -315,7 +315,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (escolhido == null || escolhido.isEmpty || !mounted) return;
     // Guarda só o primeiro emoticon (alguns têm vários code points, como
     // 👨‍👩‍👧, 🇧🇷 ou 🧑🏽).
-    setState(() => _avatar = escolhido.characters.first);
+    _selecionarAvatar(escolhido.characters.first);
   }
 
   /// Escolhe a foto (galeria/câmera), valida o tamanho e abre o ajuste
@@ -405,6 +405,25 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     }
   }
 
+  /// Escolha de emoticon (atalhos ou grade): além de trocar o avatar, remove
+  /// a foto anterior da prévia para o emoticon voltar a aparecer.
+  ///
+  /// A cópia nova desta sessão vira órfã e é apagada na hora; a foto já salva
+  /// só sai do disco ao Salvar (ver [_salvar]).
+  void _selecionarAvatar(String avatar) {
+    final atual = _fotoPath;
+    setState(() {
+      _avatar = avatar;
+      _fotoPath = null;
+    });
+    if (atual != null &&
+        atual != _fotoPathInicial &&
+        atual == _fotoPendente) {
+      _fotoPendente = null;
+      apagarArquivoAvatar(atual);
+    }
+  }
+
   /// Perfil da prévia (fundo + avatar), incluindo foto e recorte atuais.
   UserProfile _perfilPrevia() => UserProfile(
         nome: _nome.text.trim(),
@@ -469,15 +488,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _cabecalho(onCor),
-                          _previewAvatar(onCor),
+                          _previewAvatar(),
                           _campoNome(onCor),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _escolhaAvatar(onCor),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _escolhaTema(onCor),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _escolhaCor(onCor),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 20),
                           _botaoSalvar(),
                         ],
                       ),
@@ -514,55 +533,110 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     ],
   );
 
-  Widget _previewAvatar(Color onCor) => Padding(
+  /// Prévia "como os outros vão te ver": caixa com cantos arredondados na cor
+  /// do tema escolhido (com gradiente), contendo avatar + nome digitado.
+  /// Muda automaticamente ao trocar a cor/tema — igual à imagem de referência.
+  Widget _previewAvatar() => Padding(
     padding: const EdgeInsets.only(top: 24),
-    child: Column(
-      children: [
-        Tooltip(
-          message: 'Toque para trocar o avatar',
-          child: InkWell(
-            key: const ValueKey('avatar-preview'),
-            onTap: _menuAvatar,
-            customBorder: const CircleBorder(),
-            child: Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                ProfileAvatar(
-                  perfil: _perfilPrevia(),
-                  radius: 48,
-                  fontSize: 48,
-                  backgroundColor: onCor.withValues(alpha: 0.08),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Theme.of(context).colorScheme.primary,
+    child: Container(
+      key: const ValueKey('avatar-preview-card'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(_cor, Colors.white, 0.06) ?? _cor,
+            _cor,
+            Color.lerp(_cor, Colors.black, 0.22) ?? _cor,
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: 'Toque para trocar o avatar',
+            child: InkWell(
+              key: const ValueKey('avatar-preview'),
+              onTap: _menuAvatar,
+              customBorder: const CircleBorder(),
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF1C1C1E),
+                    ),
+                    child: ProfileAvatar(
+                      perfil: _perfilPrevia(),
+                      radius: 44,
+                      fontSize: 48,
+                      backgroundColor: const Color(0xFF1C1C1E),
+                    ),
                   ),
-                  child: Icon(
-                    _escolhendoFoto
-                        ? Icons.hourglass_top
-                        : Icons.photo_camera_outlined,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.onPrimary,
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Theme.of(context).colorScheme.primary,
+                      border: Border.all(
+                        color: const Color(0xFF1C1C1E),
+                        width: 2,
+                      ),
+                    ),
+                    child: Icon(
+                      _escolhendoFoto
+                          ? Icons.hourglass_top
+                          : Icons.photo_camera_outlined,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _fotoPath == null
-              ? 'Toque na foto para trocar o avatar'
-              : 'Foto: arraste na edição para posicionar',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            color: onCor.withValues(alpha: 0.7),
+          const SizedBox(height: 12),
+          Text(
+            'Escolha seu avatar',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: onBackgroundColor(_cor).withValues(alpha: 0.75),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            // \u200B (zero-width) ao final: evita que `find.text(nome)`
+            // dos testes conte a prévia junto com o campo de texto —
+            // visualmente idêntico ao nome digitado.
+            '${_nome.text.trim().isEmpty ? 'Seu nome' : _nome.text.trim()}\u200B',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: onBackgroundColor(_cor),
+            ),
+          ),
+          // const SizedBox(height: 2),
+          // Text(
+          //   'é assim que os outros vão te ver',
+          //   textAlign: TextAlign.center,
+          //   style: TextStyle(
+          //     fontSize: 13,
+          //     color: onBackgroundColor(_cor).withValues(alpha: 0.7),
+          //   ),
+          // ),
+        ],
+      ),
     ),
   );
 
@@ -611,7 +685,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Widget _escolhaAvatar(Color onCor) => Column(
     children: [
       Text(
-        'Escolha seu avatar',
+        'Avatar',
         style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
       ),
       const SizedBox(height: 12),
@@ -625,7 +699,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               avatar: avatar,
               selected: _fotoPath == null && avatar == _avatar,
               onCor: onCor,
-              onTap: () => setState(() => _avatar = avatar),
+              onTap: () => _selecionarAvatar(avatar),
             ),
         ],
       ),
@@ -697,13 +771,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         'Cor de fundo',
         style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
       ),
-      const SizedBox(height: 12),
-      Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 12,
-        runSpacing: 12,
+      const SizedBox(height: 8),
+      // Duas fileiras centralizadas (4 + 4): mantém o mesmo espaçamento do
+      // Wrap anterior, mas garante o alinhamento pedido no layout.
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          for (var i = 0; i < _paletaCores.length; i++)
+          for (var i = 0; i < 4 && i < _paletaCores.length; i++) ...[
+            if (i > 0) const SizedBox(width: 12),
             ColorChoice(
               key: ValueKey('cor-$i'),
               color: _paletaCores[i],
@@ -711,6 +786,23 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               onCor: onCor,
               onTap: () => setState(() => _cor = _paletaCores[i]),
             ),
+          ],
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 4; i < _paletaCores.length; i++) ...[
+            if (i > 4) const SizedBox(width: 12),
+            ColorChoice(
+              key: ValueKey('cor-$i'),
+              color: _paletaCores[i],
+              selected: _paletaCores[i] == _cor,
+              onCor: onCor,
+              onTap: () => setState(() => _cor = _paletaCores[i]),
+            ),
+          ],
         ],
       ),
     ],
