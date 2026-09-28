@@ -116,15 +116,32 @@ List<Expense> expandirParcelas(Expense base) {
 
 /// Soma [meses] a [data] preservando dia/hora; trava no último dia do mês
 /// (ex.: 31/01 + 1 mês = 28/02).
+///
+/// O ano também é travado nos limites construíveis do `DateTime`
+/// (range absoluto: -271821-04-20 .. 275760-09-13): sem isso, datas
+/// extremas fariam `DateTime()` lançar `ArgumentError` e derrubar a
+/// expansão de parcelas. A distorção só ocorre a um ano das bordas
+/// absolutas, inalcançável pelos fluxos do app.
 DateTime addMonths(DateTime data, int meses) {
   if (meses == 0) return data;
   final totalMeses = (data.month - 1) + meses;
-  final ano = data.year + totalMeses ~/ 12;
+  final ano = _clampAno(data.year + totalMeses ~/ 12);
   final mes = totalMeses % 12 + 1;
   final ultimoDia = DateTime(ano, mes + 1, 0).day;
   final dia = data.day > ultimoDia ? ultimoDia : data.day;
   return DateTime(
       ano, mes, dia, data.hour, data.minute, data.second, data.millisecond);
+}
+
+/// Ano mínimo/máximo construídos com folga de segurança (meses e dias
+/// normalizados nas bordas permanecem dentro do range do `DateTime`).
+const int _anoMinSeguro = -271820;
+const int _anoMaxSeguro = 275759;
+
+int _clampAno(int ano) {
+  if (ano < _anoMinSeguro) return _anoMinSeguro;
+  if (ano > _anoMaxSeguro) return _anoMaxSeguro;
+  return ano;
 }
 
 final expensesProvider =

@@ -76,6 +76,18 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   }
   bool _saving = false;
 
+  /// Estado dos campos no momento da abertura da tela: referência de
+  /// [hasUnsavedChanges]. Um snapshot no `initState` evita comparar com
+  /// `DateTime.now()`, que mudaria a cada chamada e marcaria todo form novo
+  /// intocado como "com alterações não salvas".
+  late final String _valorAbertura;
+  late final String _estabelecimentoAbertura;
+  late final String _descricaoAbertura;
+  late final Category _categoriaAbertura;
+  late final PaymentMethod _formaAbertura;
+  late final EntryKind _tipoAbertura;
+  late final DateTime _dataHoraAbertura;
+
   /// Aviso sob o campo estabelecimento quando há sufixo "x/y": quantos
   /// lançamentos mensais serão criados e com qual valor. Exibido em caixa
   /// própria (largura total, texto centralizado e com quebra de linha) para
@@ -98,31 +110,19 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         '${parcela.total}/${parcela.total}), um por mês.';
   }
 
-  bool get hasUnsavedChanges {
-    final e = widget.expense;
-    final d = widget.fromDraft;
-    final total = e?.valorCentavos ?? d?.draft.totalCentavos;
-    final currentCentavos = parseMoneyInput(_valor.text);
-    if (currentCentavos == null || currentCentavos != total) return true;
-    final currentEstabelecimento = _estabelecimento.text.trim();
-    final originalEstabelecimento =
-        e?.estabelecimento ?? d?.draft.estabelecimento ?? '';
-    if (currentEstabelecimento != originalEstabelecimento) return true;
-    final currentDescricao = _descricao.text.trim();
-    final originalDescricao = e?.descricao ?? '';
-    if (currentDescricao != originalDescricao) return true;
-    if (_categoria != (e?.categoria ?? d?.categoria ?? _padraoPara(_tipo))) {
-      return true;
-    }
-    if (_forma != (e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros)) {
-      return true;
-    }
-    if (_tipo != (e?.tipo ?? widget.tipoInicial)) return true;
-    if (_dataHora != (e?.dataHora ?? d?.draft.dataHora ?? DateTime.now())) {
-      return true;
-    }
-    return false;
-  }
+  /// `true` quando o usuário alterou algo desde a abertura da tela.
+  ///
+  /// Compara com o snapshot salvo no [initState]; nunca com `DateTime.now()`
+  /// (que mudaria a cada chamada e faria um form novo intocado ser sempre
+  /// tratado como sujo, pedindo confirmação ao sair sem nenhuma alteração).
+  bool get hasUnsavedChanges =>
+      _valor.text != _valorAbertura ||
+      _estabelecimento.text != _estabelecimentoAbertura ||
+      _descricao.text != _descricaoAbertura ||
+      _categoria != _categoriaAbertura ||
+      _forma != _formaAbertura ||
+      _tipo != _tipoAbertura ||
+      _dataHora != _dataHoraAbertura;
 
   @override
   void initState() {
@@ -146,6 +146,13 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         CategoryX.paraTipo(_tipo).contains(inicial) ? inicial : _padraoPara(_tipo);
     _forma = e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros;
     _dataHora = e?.dataHora ?? d?.draft.dataHora ?? DateTime.now();
+    _valorAbertura = _valor.text;
+    _estabelecimentoAbertura = _estabelecimento.text;
+    _descricaoAbertura = _descricao.text;
+    _categoriaAbertura = _categoria;
+    _formaAbertura = _forma;
+    _tipoAbertura = _tipo;
+    _dataHoraAbertura = _dataHora;
   }
 
   @override
@@ -177,9 +184,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       initialTime: TimeOfDay.fromDateTime(_dataHora),
     );
     if (!mounted) return;
+    // Ao cancelar o seletor de hora, mantém a hora/minuto originais em vez
+    // de forçar 12:00 (o `_dataHora` só é trocado no setState abaixo).
     setState(() {
       _dataHora = DateTime(date.year, date.month, date.day,
-          time?.hour ?? 12, time?.minute ?? 0);
+          time?.hour ?? _dataHora.hour, time?.minute ?? _dataHora.minute);
     });
   }
 
@@ -396,6 +405,9 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 decoration:
                     const InputDecoration(labelText: 'Descrição (opcional)'),
                 textCapitalization: TextCapitalization.sentences,
+                // Precisa de setState: sem rebuild, o canPop do PopScope não
+                // atualiza e a saída perderia o texto digitado sem perguntar.
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<Category>(

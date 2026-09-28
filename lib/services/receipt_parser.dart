@@ -203,10 +203,20 @@ class ReceiptParser {
   }
 
   /// Converte "1.234,56" em centavos (123456).
+  ///
+  /// O OCR às vezes lê um valor malformado com dígitos demais
+  /// ("999.999...999,99"), fora do range de `int`: em vez de lançar
+  /// `FormatException` e derrubar o parse, trava no teto do app (R$ 1 tri),
+  /// mesmo limite de `parseMoneyInput`.
   static int moneyToCentavos(String s) {
     final digits = s.replaceAll('.', '').replaceAll(',', '');
-    return int.parse(digits);
+    final centavos = int.tryParse(digits);
+    if (centavos == null) return maxCentavos;
+    return centavos > maxCentavos ? maxCentavos : centavos;
   }
+
+  /// Teto de valor em centavos (R$ 1 trilhão = 1e12 reais).
+  static const int maxCentavos = 100000000000000;
 
   static int? _total(List<String> lines) {
     // Marcadores fortes do valor total a pagar.

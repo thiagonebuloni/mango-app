@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,10 @@ final _brl = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$', decimalDigits
 String formatBRL(int centavos) => _brl.format(centavos / 100);
 
 /// Formata texto digitado ("1.234,56" ou "1234,5") em centavos.
+///
+/// Limita a faixa a R$ 1 tri (`1e12`): valores maiores vêm de entrada
+/// absurda (ex.: 307+ dígitos colados) e `Infinity.round()` lançaria
+/// `UnsupportedError` quebrando o build do formulário.
 int? parseMoneyInput(String input) {
   final cleaned = input
       .replaceAll(RegExp(r'[^0-9,.]'), '')
@@ -28,7 +33,9 @@ int? parseMoneyInput(String input) {
       .trim();
   if (cleaned.isEmpty) return null;
   final value = double.tryParse(cleaned);
-  if (value == null || value <= 0) return null;
+  if (value == null || !value.isFinite || value <= 0 || value > 1e12) {
+    return null;
+  }
   return (value * 100).round();
 }
 
@@ -383,6 +390,30 @@ String mangoBackupFileName([DateTime? when]) {
   return 'mango_backup_$dd$mm$yyyy$hh$mi$ss.csv';
 }
 
+/// Lê um backup CSV a partir de um fluxo de bytes, com teto de memória (A2).
+///
+/// Ler com `readAsBytes()` carrega o arquivo inteiro de uma vez: um arquivo
+/// escolhido por engano (backup gigante, vídeo renomeado para `.csv`) derruba
+/// o app por falta de memória. Aqui os blocos são acumulados e a leitura é
+/// **interrompida** assim que o total passa de [CsvBackup.maxBytes], lançando
+/// [CsvImportException] com a mensagem pronta para o usuário. A decodificação
+/// só acontece no fim, então um caractere UTF-8 partido entre dois blocos é
+/// lido corretamente.
+Future<String> lerBackupCsv(Stream<List<int>> bytes) async {
+  final acumulado = BytesBuilder(copy: false);
+  await for (final bloco in bytes) {
+    acumulado.add(bloco);
+    if (acumulado.length > CsvBackup.maxBytes) {
+      // `validateImportSize` só devolve null dentro do limite, e aqui o
+      // limite já foi ultrapassado.
+      throw CsvImportException(
+        CsvBackup.validateImportSize(acumulado.length)!,
+      );
+    }
+  }
+  return utf8.decode(acumulado.takeBytes());
+}
+
 /// Exporta os lançamentos em CSV e abre a folha de compartilhamento do
 /// sistema (salvar em arquivos, enviar por e-mail/mensageiro etc.).
 Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
@@ -427,16 +458,36 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     return;
   }
   if (files.isEmpty) return; // usuário cancelou
+  final arquivo = files.first;
+  // Confere o tamanho informado pelo seletor antes de ler qualquer byte: um
+  // arquivo absurdo nem chega a ser carregado na memória (A2).
+  final tamanho = arquivo.lengthSync() ?? await arquivo.length();
+  if (tamanho != null) {
+    final recusa = CsvBackup.validateImportSize(tamanho);
+    if (recusa != null) {
+      messenger.showSnackBar(SnackBar(content: Text(recusa)));
+      return;
+    }
+  }
   String texto;
   try {
-    texto = utf8.decode(await files.first.readAsBytes());
+    texto = await lerBackupCsv(arquivo.readAsByteStream());
+  } on CsvImportException catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    return;
   } catch (e) {
     messenger.showSnackBar(
       SnackBar(content: Text('Erro ao ler o arquivo: $e')),
     );
     return;
   }
-  final result = CsvBackup.import(texto);
+  CsvImportResult result;
+  try {
+    result = CsvBackup.import(texto);
+  } on CsvImportException catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    return;
+  }
   if (result.expenses.isEmpty && result.perfil == null) {
     messenger.showSnackBar(
       const SnackBar(

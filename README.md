@@ -78,8 +78,8 @@ de pagamento (mês / 30 dias / ano / intervalo custom).
 ```bash
 flutter build apk --release
 # APK em build/app/outputs/flutter-apk/app-release.apk
-# Instalar no aparelho:
-adb install build/app/outputs/flutter-apk/app-release.apk
+# Instalar no aparelho (sempre no usuário principal — veja abaixo):
+tool/install_release.sh
 ```
 
 > **Importante (OCR no release):** o APK de release passa por minificação/R8.
@@ -90,6 +90,81 @@ adb install build/app/outputs/flutter-apk/app-release.apk
 > on a null object reference`. As regras de keep necessárias estão em
 > **`android/app/proguard-rules.pro`** — não remova esse arquivo. Mais detalhes
 > e como validar em [Solução de problemas](#solução-de-problemas).
+
+### Instalando no aparelho (sem cair no "Segundo espaço")
+
+`adb install` (e o `flutter run`, que usa o mesmo caminho) instala para o
+usuário **ativo** no aparelho. Se na hora o Xiaomi estiver no *Segundo espaço*
+(usuário 10 — um usuário Android separado, como o *espaço privado* do Android
+15+, que é o usuário 11), o app vai **só** para lá: fica invisível no espaço
+principal e, depois, um `adb install` normal falha com
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` se a chave for outra. Para não depender do
+estado da tela, fixe o usuário principal:
+
+```bash
+tool/install_release.sh            # instala em --user 0 e confere onde caiu
+# ou na mão (o `pm install` é o caminho garantido; `adb install --user 0 <apk>`
+# também funciona em platform-tools recentes, apesar de não constar no `adb help`):
+adb push build/app/outputs/flutter-apk/app-release.apk /data/local/tmp/
+adb shell pm install --user 0 -r /data/local/tmp/mango-release.apk
+adb shell pm list packages --user 0  | grep mango   # deve aparecer
+adb shell pm list packages --user 10 | grep mango   # não deve aparecer nada
+```
+
+`tool/install_release.sh` avisa se o aparelho estiver em outro usuário e mostra o
+comando para limpar uma cópia que tenha ido para o Segundo espaço
+(`adb shell pm uninstall --user 10 br.com.mango.mango`), sem tocar na do espaço
+principal. Para instalar de propósito lá, troque o alvo:
+`adb shell pm install --user 10 -r <apk>`.
+
+### Assinatura do APK (chave própria)
+
+O release **não** usa a chave de debug: ela é pública (vem no SDK do Android e
+é a mesma em qualquer máquina), então um APK assinado com ela pode ser
+"atualizado" por qualquer pessoa que saiba o nome do pacote
+(`br.com.mango.mango`). A chave de verdade fica fora do Git, em
+`android/key.properties` + keystore `.jks` (ambos no `android/.gitignore`).
+Sem essa chave o build de release **para** com instruções, em vez de gerar um
+APK mal assinado — debug e profile seguem funcionando normalmente.
+
+Criar o keystore (uma vez; **guarde o `.jks` e as senhas**: sem eles não é
+possível assinar atualizações do mesmo app):
+
+```bash
+keytool -genkeypair -v -keystore ~/mango-release.jks -alias mango \
+  -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Criar `android/key.properties` apontando para ele (`storeFile` aceita caminho
+absoluto ou relativo à pasta `android/`):
+
+```properties
+storeFile=/home/<usuario>/mango-release.jks
+storePassword=<senha do keystore>
+keyAlias=mango
+keyPassword=<senha do keystore>
+```
+
+> **PKCS12 tem uma única senha** (é o formato padrão do `keytool` moderno,
+> mesmo com a extensão `.jks`, que aqui é só o nome do arquivo): `keyPassword`
+> **precisa** ser igual a `storePassword`. Um valor diferente faz o build
+> falhar no fim do empacotamento com `Get Key failed: Given final block not
+> properly padded` (veja [Solução de problemas](#solução-de-problemas)).
+> Quer senhas realmente distintas? Gere o keystore com `-storetype JKS`.
+> O `android/app/build.gradle.kts` aceita os dois formatos e, se o keystore for
+> PKCS12 com `keyPassword` divergente, usa o `storePassword` para assinar
+> (avisando no build) em vez de falhar.
+
+Depois é só `flutter build apk --release` (ou `flutter build appbundle
+--release`). Conferir com qual chave o APK saiu — deve mostrar o seu `CN=`,
+nunca `CN=Android Debug` (o `apksigner` vem no `build-tools` do SDK do
+Android; com `minSdk` ≥ 24 o AGP assina com o esquema v2/v3, que o
+`keytool -printcert -jarfile` não lê):
+
+```bash
+$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
+  build/app/outputs/flutter-apk/app-release.apk
+```
 
 ## Solução de problemas
 
@@ -121,6 +196,71 @@ antigos (quebrados) continuam no disco.
 Para iOS: `flutter build ios --release` (requer Mac + Xcode; ML Kit pede
 target iOS ≥ 15.5 e excluir arquitetura armv7 em Runner > Build Settings).
 
+### "Get Key failed: Given final block not properly padded" ao assinar o release
+
+`Execution failed for task ':app:packageRelease'` terminando com
+`KeytoolException: Failed to read key mango from store ".../mango-release.jks":
+Get Key failed: Given final block not properly padded` significa que a chave
+existe, mas não abre com a senha informada. A causa quase sempre é o
+`keyPassword` de `android/key.properties` diferente do `storePassword`: o
+keystore é **PKCS12** (padrão do `keytool` desde o Java 9, mesmo com extensão
+`.jks`) e PKCS12 guarda **uma única senha**.
+
+Correção (as senhas não aparecem na saída do comando):
+
+```bash
+cd android
+SP=$(grep '^storePassword=' key.properties | cut -d= -f2-)
+sed -i "s/^keyPassword=.*/keyPassword=$SP/" key.properties   # PKCS12: senha única
+keytool -list -keystore /home/<usuario>/mango-release.jks -storepass "$SP"
+# deve listar a entrada 'mango' e "Tipo de área de armazenamento de chaves: PKCS12"
+```
+
+Como o build já trata esse caso (usando o `storePassword` como senha da chave
+quando o keystore é PKCS12), o sintoma agora aparece como **aviso** no build,
+não como falha: se o aviso persistir, iguale o `keyPassword` para o build sair
+limpo. Se o próprio `keytool -list` falhar, o problema é o `storePassword` (e
+não há como recuperá-lo): gere um keystore novo e lembre que um APK com outra
+assinatura **não** atualiza o app instalado — precisa desinstalar antes.
+
+### "INSTALL_FAILED_UPDATE_INCOMPATIBLE: ... signatures do not match" ao instalar
+
+```
+adb: failed to install .../app-release.apk: Failure
+[INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package br.com.mango.mango
+signatures do not match newer version; ignoring!]
+```
+
+O app já instalado foi assinado com **outra chave** — em geral o release antigo,
+assinado com a chave de **debug** pública (`CN=Android Debug`), de antes da
+assinatura própria. O Android **não** permite trocar a chave de um app
+instalado, e nenhuma flag do `adb install` contorna isso (`-r`, `-d`,
+`--bypass-low-target-sdk-block` não ajudam). Confira a chave do que está no
+aparelho:
+
+```bash
+adb shell pm path br.com.mango.mango                       # caminho do base.apk
+adb pull /data/app/.../base.apk /tmp/instalado.apk
+$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs /tmp/instalado.apk
+# CN=Android Debug -> era o release antigo, sem chave própria
+```
+
+Migrar (uma única vez; **exporte antes** se já tiver lançamentos — menu →
+*Exportar em CSV* — e restaure no primeiro acesso com *Restaurar backup*):
+
+```bash
+adb uninstall br.com.mango.mango   # remove de todos os usuários/espaços
+# `adb uninstall -k br.com.mango.mango` tenta manter os dados; não é garantido
+tool/install_release.sh            # instala só no usuário principal
+```
+
+Depois disso, **toda** build de release precisa do mesmo keystore
+(`~/mango-release.jks`): outra chave exige desinstalar de novo. Vale também para
+o `flutter run`, que usa a chave de debug — com o release instalado no mesmo
+espaço, use `flutter run --release` ou desinstale antes. Para o app não acabar
+no *Segundo espaço* do aparelho, veja
+[Instalando no aparelho](#instalando-no-aparelho-sem-cair-no-segundo-espaço).
+
 ## Estrutura
 
 ```
@@ -145,7 +285,8 @@ lib/
 │   └── reports_screen.dart    # relatórios por período
 └── widgets/common.dart        # formatação BRL, ícones/cores, FAB, tiles
 
-test/                          # parser_test.dart + widget_test.dart
+test/                          # parser, parcelas, backup CSV, UI e auditorias (audit_probe*)
+tool/                          # generate_icon.py + install_release.sh (instala no usuário 0)
 ```
 
 ## Permissões

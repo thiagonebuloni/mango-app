@@ -645,7 +645,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     child: TextFormField(
       controller: _nome,
       textCapitalization: TextCapitalization.words,
-      maxLength: 24,
+      maxLength: UserProfile.nomeMaxLength,
       // Cor explícita a partir da prévia do fundo (não do Theme do app):
       // ao alternar o tema na edição, o Scaffold mostra a prévia mas o
       // Theme ainda é o do perfil salvo — sem isto o texto herdaria a cor

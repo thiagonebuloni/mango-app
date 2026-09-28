@@ -182,16 +182,25 @@ class Expense {
   /// lançamentos com a mesma chave são o mesmo registro (independente do
   /// id gerado pelo banco). Todos os campos persistidos no CSV participam,
   /// e a data entra em milissegundos para sobreviver ao export/import.
+  ///
+  /// Os campos de texto entram como `tamanho:valor`: o prefixo de tamanho
+  /// torna a codificação injetiva, então um `|` dentro da descrição ou do
+  /// estabelecimento não consegue colidir com o separador (ex.: descrição
+  /// "a" + estab "b|c" x descrição "a|b" + estab "c").
   String get chaveUnica => [
         tipo.name,
         valorCentavos,
         dataHora.millisecondsSinceEpoch,
         categoria.name,
         forma.name,
-        descricao,
-        estabelecimento,
+        _campoComTamanho(descricao),
+        _campoComTamanho(estabelecimento),
         origem.name,
       ].join('|');
+
+  /// Prefixa um campo de texto com o comprimento: codificação injetiva,
+  /// imune a colisão com o separador `|` usado em [chaveUnica].
+  static String _campoComTamanho(String valor) => '${valor.length}:$valor';
 
   Expense copyWith({
     int? id,
@@ -332,6 +341,60 @@ class UserProfile {
   static const int corFundoEscuroPadrao = 0xFF33393B;
   /// Cor de fundo padrão do app (tema escuro).
   static const int corFundoInicialPadrao = corFundoEscuroPadrao;
+
+  /// Limite de caracteres do nome (mesmo da tela de perfil, que usa
+  /// [nomeMaxLength] no `maxLength` do campo).
+  static const int nomeMaxLength = 24;
+
+  /// Limite de caracteres do avatar (emoticon). A tela de perfil só oferece
+  /// emoticons de um caractere; o teto protege o app de um backup editado à
+  /// mão com um "avatar" de megabytes.
+  static const int avatarMaxLength = 16;
+
+  /// `true` quando [valor] pode ser cor de fundo: ARGB de 32 bits com
+  /// **opacidade total**.
+  ///
+  /// `Color(v)` usa `v >> 24`, `v >> 16`, `v >> 8` e `v` (só os 8 bits de
+  /// baixo de cada componente, sem avisar), então valores fora dessa faixa
+  /// não quebram: viram outra cor. O caso ruim é a transparência —
+  /// `cor=0`, `cor=4294967296` (2^32) e negativos dão fundo **invisível**, e
+  /// o texto por cima (escolhido por contraste com o preto) some junto.
+  static bool corFundoValida(int valor) =>
+      valor >= 0 && valor <= 0xFFFFFFFF && (valor & 0xFF000000) == 0xFF000000;
+
+  /// Nome no formato que o app aceita: sem caracteres de controle, com
+  /// espaços colapsados e no máximo [nomeMaxLength] caracteres.
+  ///
+  /// A tela de perfil já limita o que o usuário digita; um backup editado à
+  /// mão, porém, entrava inteiro (nome de centenas de milhares de
+  /// caracteres), e a tela inicial refaz o layout desse texto a cada rebuild.
+  ///
+  /// O corte conta *runes* (pontos de código), não grafemas como o
+  /// `maxLength` do campo: um nome só de emojis compostos (ex.: 🏳️‍🌈) pode
+  /// sair um pouco mais curto que o digitado. Limitar demais é inofensivo —
+  /// o que não pode é aceitar tamanho arbitrário de um arquivo de fora.
+  static String sanitizarNome(String? bruto) => _textoCurto(bruto, nomeMaxLength);
+
+  /// Avatar no formato que o app aceita (ver [avatarMaxLength]).
+  static String sanitizarAvatar(String? bruto) =>
+      _textoCurto(bruto, avatarMaxLength);
+
+  static final RegExp _controle = RegExp(r'[\u0000-\u001F\u007F]');
+  static final RegExp _espacos = RegExp(r'\s+');
+
+  static String _textoCurto(String? bruto, int max) {
+    if (bruto == null) return '';
+    final colapsado = bruto
+        .replaceAll(_controle, ' ')
+        .replaceAll(_espacos, ' ')
+        .trim();
+    // Corta por *runes* (pontos de código), não por unidades UTF-16: cortar no
+    // meio de um par substituto produziria um caractere inválido (�).
+    final runes = colapsado.runes;
+    return runes.length <= max
+        ? colapsado
+        : String.fromCharCodes(runes.take(max));
+  }
 
   /// `true` quando há uma foto de avatar para exibir em vez do emoticon.
   bool get temFoto =>

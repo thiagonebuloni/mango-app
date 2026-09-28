@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,14 +40,34 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         return;
       }
       if (files.isEmpty) return;
+      final arquivo = files.first;
+      // Tamanho conferido antes de ler (A2): arquivo absurdo não entra na
+      // memória e o usuário recebe o motivo em vez de um app travado.
+      final tamanho = arquivo.lengthSync() ?? await arquivo.length();
+      if (tamanho != null) {
+        final recusa = CsvBackup.validateImportSize(tamanho);
+        if (recusa != null) {
+          messenger.showSnackBar(SnackBar(content: Text(recusa)));
+          return;
+        }
+      }
       String texto;
       try {
-        texto = utf8.decode(await files.first.readAsBytes());
+        texto = await lerBackupCsv(arquivo.readAsByteStream());
+      } on CsvImportException catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
+        return;
       } catch (e) {
         messenger.showSnackBar(SnackBar(content: Text('Erro ao ler o arquivo: $e')));
         return;
       }
-      final result = CsvBackup.import(texto);
+      CsvImportResult result;
+      try {
+        result = CsvBackup.import(texto);
+      } on CsvImportException catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
+        return;
+      }
       if (result.perfil == null && result.expenses.isEmpty) {
         messenger.showSnackBar(const SnackBar(content: Text('Nenhum dado valido encontrado no arquivo de backup')));
         return;

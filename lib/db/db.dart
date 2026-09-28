@@ -264,6 +264,37 @@ class CsvBackup {
   static const backupMarker = '# MANGO_BACKUP v2';
   static const perfilMarker = '# PERFIL;';
 
+  /// Tamanho máximo aceito no import (A2).
+  ///
+  /// Sem teto, um arquivo escolhido por engano (backup gigante, vídeo
+  /// renomeado para `.csv`) era lido inteiro com `readAsBytes()` e ainda
+  /// duplicado em `String` + lista de linhas, derrubando o app por falta de
+  /// memória. 16 MiB ≈ 150 mil lançamentos reais (linha típica ~100 bytes).
+  static const maxBytes = 16 * 1024 * 1024;
+
+  /// Teto de linhas processadas: um arquivo dentro de [maxBytes] pode ter
+  /// milhões de linhas minúsculas, e aí quem estoura a memória é a lista
+  /// de linhas (e não o tamanho em bytes).
+  static const maxLines = 200000;
+
+  static const _umMb = 1024 * 1024;
+
+  /// `null` quando o arquivo cabe no import; caso contrário, a mensagem
+  /// pronta para mostrar ao usuário.
+  ///
+  /// Chamado **antes** de ler os bytes (pelo tamanho informado pelo seletor
+  /// de arquivos), para nem encostar na memória em arquivos absurdos.
+  static String? validateImportSize(int bytes) {
+    if (bytes <= maxBytes) return null;
+    final valor = bytes / _umMb;
+    final mb = valor == valor.roundToDouble()
+        ? valor.toStringAsFixed(0)
+        : valor.toStringAsFixed(1).replaceAll('.', ',');
+    return 'Arquivo muito grande para importar ($mb MB). '
+        'O limite é ${maxBytes ~/ _umMb} MB — exporte o backup pelo próprio '
+        'Mango ou divida o arquivo em partes.';
+  }
+
   static String _esc(String value) =>
       '"${value.replaceAll('"', '""')}"';
 
@@ -309,7 +340,12 @@ class CsvBackup {
   }
 
   /// Resultado da importação: lançamentos válidos + perfil + linhas ignoradas.
+  ///
+  /// Lança [CsvImportException] quando o texto passa de [maxBytes]/[maxLines]
+  /// (A2): quem chama mostra a mensagem em vez de deixar o app morrer por
+  /// falta de memória.
   static CsvImportResult import(String csvText) {
+    _verificarLimites(csvText);
     final lines = const LineSplitter().convert(csvText.trim());
     if (lines.isEmpty) {
       return const CsvImportResult(expenses: [], skipped: 0);
@@ -336,19 +372,56 @@ class CsvBackup {
     return CsvImportResult(expenses: expenses, skipped: skipped, perfil: perfil);
   }
 
+  /// Recusa textos que estourariam a memória (A2).
+  ///
+  /// Todo caractere UTF-8 ocupa pelo menos 1 byte, então `length` maior que
+  /// [maxBytes] só acontece em texto vindo de um arquivo já recusado pelo
+  /// tamanho — mas a checagem fica aqui também para proteger qualquer outro
+  /// chamador. As quebras são contadas antes de dividir o texto: com milhões
+  /// de linhas minúsculas, quem estoura a memória é a lista de linhas.
+  static void _verificarLimites(String csvText) {
+    if (csvText.length > maxBytes) {
+      throw CsvImportException(validateImportSize(csvText.length)!);
+    }
+    var quebras = 0;
+    for (final unidade in csvText.codeUnits) {
+      // Mesmos terminadores que o `LineSplitter` reconhece (\r\n conta duas).
+      if (unidade == 0x0A ||
+          unidade == 0x0D ||
+          unidade == 0x85 ||
+          unidade == 0x2028 ||
+          unidade == 0x2029) {
+        quebras++;
+        if (quebras > maxLines) {
+          throw const CsvImportException(
+            'Arquivo com linhas demais para importar. '
+            'Divida o backup em partes menores.',
+          );
+        }
+      }
+    }
+  }
+
   /// Interpreta a linha `# PERFIL;nome=...;avatar=...;cor=...;tema=...`.
   /// Campos ausentes/inválidos caem nos padrões do app (tema escuro,
   /// cor escura, nome/avatar padrão). `null` = linha não é de perfil.
+  ///
+  /// Nome, avatar e cor passam pelas mesmas regras da tela de perfil (A4):
+  /// o arquivo pode ter sido editado à mão, e o import é a porta de entrada
+  /// desses valores — um nome gigante ou uma cor transparente (`cor=0`,
+  /// `cor=4294967296`) deixariam a tela inicial lenta ou invisível.
   static UserProfile? _parsePerfilLine(String line) {
     if (!line.startsWith(perfilMarker)) return null;
     final resto = line.substring(perfilMarker.length);
     final campos = _splitPerfilFields(resto);
-    final nome = campos['nome'] ?? '';
-    final avatar = (campos['avatar'] == null || campos['avatar']!.isEmpty)
-        ? UserProfile.avatarPadrao
-        : campos['avatar']!;
-    final cor = int.tryParse((campos['cor'] ?? '').trim()) ??
-        UserProfile.corFundoInicialPadrao;
+    final nome = UserProfile.sanitizarNome(campos['nome']);
+    final avatarLimpo = UserProfile.sanitizarAvatar(campos['avatar']);
+    final avatar =
+        avatarLimpo.isEmpty ? UserProfile.avatarPadrao : avatarLimpo;
+    final corLida = int.tryParse((campos['cor'] ?? '').trim());
+    final cor = (corLida != null && UserProfile.corFundoValida(corLida))
+        ? corLida
+        : UserProfile.corFundoInicialPadrao;
     final temaClaro = (campos['tema'] ?? '').trim().toLowerCase() == 'claro';
     return UserProfile(nome: nome, avatar: avatar, corFundo: cor, temaClaro: temaClaro);
   }
@@ -449,6 +522,17 @@ class CsvImportResult {
   final UserProfile? perfil;
 
   const CsvImportResult({required this.expenses, required this.skipped, this.perfil});
+}
+
+/// Erro de importação com mensagem pronta para o usuário (A2): arquivo
+/// acima de [CsvBackup.maxBytes] ou com linhas demais.
+class CsvImportException implements Exception {
+  final String message;
+
+  const CsvImportException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 /// Limites de período usados na Home e nos relatórios (semana começa na
