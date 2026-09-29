@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regras de extração de dados do Android 12+ (API >= 31), referenciadas por
+  `android:dataExtractionRules` no AndroidManifest (o `fullBackupContent` acima
+  continua sendo usado pelos aparelhos antigos).
+
+  - `cloud-backup`: nada dos dados do app vai para a conta Google. O banco
+    `mango.db` guarda o texto bruto de cada cupom (coluna `raw`), que pode
+    conter CPF impresso na nota, e o app promete dados 100% locais (veja a
+    seção "Backup, privacidade e onde ficam os dados" no README).
+  - `device-transfer`: mantido. A transferência direta entre aparelhos
+    (cabo / configuração inicial) não passa pela conta Google e é o caminho
+    natural de quem troca de celular; o backup oficial segue sendo o CSV
+    exportado pelo próprio app (menu → Exportar em CSV).
+
+  `root` é o diretório dos dados privados do app e o pai de todos os outros
+  domínios, por isso já cobre `databases/` (mango.db) e a foto do avatar;
+  os demais domínios ficam explícitos para deixar a intenção legível.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="root" path="." />
+        <include domain="database" path="." />
+        <include domain="file" path="." />
+        <include domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

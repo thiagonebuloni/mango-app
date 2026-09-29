@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regras do backup automático do Android 11 e anteriores (API <= 30),
+  referenciadas por `android:fullBackupContent` no AndroidManifest.
+
+  Política do Mango: os dados do usuário NÃO saem do aparelho no backup da
+  conta Google. O banco `mango.db` guarda o texto bruto de cada cupom (coluna
+  `raw`), que pode conter CPF impresso na nota, e o app promete dados 100%
+  locais (veja a seção "Backup, privacidade e onde ficam os dados" no README).
+
+  O backup oficial é o CSV exportado pelo próprio app (menu → Exportar em CSV):
+  arquivo em texto puro, escolhido pelo usuário, restaurável no primeiro acesso
+  em outro aparelho.
+
+  `root` é o diretório dos dados privados do app e o pai de todos os outros
+  domínios, por isso já cobre `databases/` (mango.db) e a foto do avatar;
+  `database`, `file` e `sharedpref` ficam explícitos para deixar a intenção
+  legível.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

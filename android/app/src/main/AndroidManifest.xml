@@ -1,8 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dados do app fora do backup na nuvem: o banco `mango.db` guarda o
+         texto bruto de cada cupom (coluna `raw`), que pode conter CPF impresso
+         na nota, e o app promete dados 100% locais. O backup oficial é o CSV
+         exportado pelo próprio app; a transferência direta entre aparelhos é
+         mantida. Regras em res/xml/backup_rules.xml (API <= 30) e
+         res/xml/data_extraction_rules.xml (API >= 31). -->
     <application
         android:label="Mango"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"
