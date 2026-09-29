@@ -65,7 +65,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 130 testes (parser do cupom + parcelas + categorizador + UI)
+flutter test      # 135 testes (parser do cupom + parcelas + categorizador + UI)
 ```
 
 O CI (`.github/workflows/ci.yml`) roda exatamente esses dois comandos a cada
@@ -207,6 +207,36 @@ $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
   build/app/outputs/flutter-apk/app-release.apk
 ```
 
+### Publicando uma versão
+
+1. Suba a versão no `pubspec.yaml` — `version: 1.0.1+2`: o número depois do `+`
+   é o *build number* do Android e **precisa** aumentar a cada release (o
+   Android recusa instalar um APK com o mesmo `versionCode`).
+2. Registre a mudança no [`CHANGELOG.md`](CHANGELOG.md).
+3. `flutter analyze` (deve terminar com "No issues found!"), `flutter test` e
+   `flutter build apk --release`.
+4. Marque e publique:
+
+   ```bash
+   git tag -a v1.0.1 -m "Mango 1.0.1"
+   git push origin main
+   git push origin v1.0.1
+   ```
+
+A janela *Sobre o Mango* mostra a versão lida do **próprio app instalado**
+(`lib/services/app_info.dart`), então ela nunca fica defasada em relação ao
+APK.
+
+## Licença e privacidade
+
+- Código sob a licença **MIT** — veja [`LICENSE`](LICENSE).
+- **Política de privacidade:** [`PRIVACIDADE.md`](PRIVACIDADE.md). O Play
+  Console exige uma URL pública: a forma mais simples é publicar esse arquivo
+  como página (GitHub Pages deste repositório) e colar a URL no cadastro do app.
+- Não há coleta de dados, analytics ou anúncios — o APK de release não tem nem
+  permissão de rede, o que responde "nenhum dado coletado" no formulário de
+  *Segurança dos dados* do Play.
+
 ## Solução de problemas
 
 ### "Falha ao ler o cupom ... getClass() ... on a null object reference"
@@ -334,6 +364,12 @@ tool/                          # generate_icon.py + install_release.sh (instala 
 
 ## Permissões
 
-- **Android:** nenhuma permissão explícita (câmera via app do sistema).
+- **Android:** nenhuma permissão própria — câmera e galeria são usadas pelo
+  seletor do próprio sistema. As permissões `INTERNET` e `ACCESS_NETWORK_STATE`
+  que bibliotecas arrastam (telemetria do ML Kit) são **removidas** no
+  manifesto mesclado (`android/app/src/main/AndroidManifest.xml`), então o APK
+  de **release não tem permissão de rede**. No build de **debug** a `INTERNET`
+  continua declarada em `android/app/src/debug/AndroidManifest.xml`, exigida
+  pelo Flutter para hot reload/depuração.
 - **iOS:** `NSCameraUsageDescription` e `NSPhotoLibraryUsageDescription` já
   configurados em `ios/Runner/Info.plist`.
