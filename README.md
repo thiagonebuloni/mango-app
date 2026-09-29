@@ -229,6 +229,19 @@ $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
    git push origin v1.0.1
    ```
 
+5. Publique a **Release** no GitHub com o APK (o nome do anexo leva a versão):
+
+   ```bash
+   cp build/app/outputs/flutter-apk/app-release.apk /tmp/mango-1.0.1.apk
+   sha256sum /tmp/mango-1.0.1.apk   # cole o hash no corpo das notas
+   gh release create v1.0.1 /tmp/mango-1.0.1.apk \
+     --title "Mango 1.0.1" --notes-file /tmp/notas.md --latest
+   ```
+
+   O corpo das notas é a seção correspondente do
+   [`CHANGELOG.md`](CHANGELOG.md), com instruções de instalação e o SHA-256
+   do arquivo (confira depois com `gh release view v<versão>`).
+
 A janela *Sobre o Mango* mostra a versão lida do **próprio app instalado**
 (`lib/services/app_info.dart`), então ela nunca fica defasada em relação ao
 APK.
