@@ -1,0 +1,34 @@
+name: CI
+
+# Roda o mesmo que o README pede antes de qualquer commit: `flutter analyze`
+# (deve terminar com "No issues found!") e `flutter test`. Sem Android SDK —
+# a análise e os testes rodam no Dart VM, então o job é rápido.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-e-testes:
+    name: analyze + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Versão fixada na mesma do README (testado com 3.47.5 / Dart 3.12):
+      # subir de versão é uma decisão consciente, não efeito colateral de um
+      # `stable` que mudou durante a madrugada.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
