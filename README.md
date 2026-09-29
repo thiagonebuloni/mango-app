@@ -27,7 +27,9 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
   (o app aprende quando você corrige a categoria).
 - **Confirmação humana:** o app nunca grava direto da foto — o formulário abre
   pré-preenchido para você conferir com 1 toque.
-- **Dados 100% locais** (SQLite via sqflite). Sem servidor, sem backend.
+- **Dados 100% locais** (SQLite via sqflite). Sem servidor, sem backend, e o
+  **backup automático do Android não leva esses dados para a conta Google** —
+  veja [Backup, privacidade e onde ficam os dados](#backup-privacidade-e-onde-ficam-os-dados).
 - **Perfil e tela inicial:** nome, avatar (emoticon ou foto com recorte) e
   cor de fundo escolhidos no primeiro acesso
   (`lib/screens/profile_setup_screen.dart`); a tela inicial
@@ -57,8 +59,11 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 68 testes (parser do cupom + parcelas + categorizador + UI)
+flutter test      # 116 testes (parser do cupom + parcelas + categorizador + UI)
 ```
+
+O CI (`.github/workflows/ci.yml`) roda exatamente esses dois comandos a cada
+push/PR na `main`, com o Flutter fixado na versão testada (3.47.5).
 
 ## Rodando o app
 
@@ -72,6 +77,36 @@ Dentro do app, botão **+** → "Foto do cupom fiscal" (câmera/galeria) ou
 "Lançamento manual". Aba **Relatórios** mostra gráfico de barras despesas
 x receitas do período, total do período, gráfico por categoria e por forma
 de pagamento (mês / 30 dias / ano / intervalo custom).
+
+## Backup, privacidade e onde ficam os dados
+
+- **No aparelho:** tudo vive dentro do sandbox do app — o banco `mango.db`
+  (SQLite via sqflite, em `databases/`) e a foto do avatar escolhida no perfil
+  (uma cópia em `app_flutter/`, veja `lib/widgets/avatar.dart`). Nada é enviado
+  para servidor nenhum.
+- **Backup automático do Android:** os dados do app **não** entram no backup da
+  conta Google. As regras em `android/app/src/main/res/xml/backup_rules.xml`
+  (Android 11 e anteriores) e `android/app/src/main/res/xml/data_extraction_rules.xml`
+  (Android 12+) excluem os dados privados do `cloud-backup` — o banco guarda o
+  **texto bruto de cada cupom** (coluna `raw`), que pode conter CPF impresso na
+  nota. A **transferência direta entre aparelhos** (cabo / configuração inicial)
+  continua funcionando, porque não passa pela conta Google.
+- **Backup oficial: o CSV.** Menu → *Exportar em CSV* grava
+  `mango_backup_DDMMAAAAHHMMSS.csv` com o perfil (nome/avatar/cor/tema) e os
+  lançamentos (`tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem`)
+  e abre a folha de compartilhamento do sistema. Para restaurar: menu →
+  *Importar em CSV* (soma aos lançamentos, sem apagar nada) ou *Restaurar
+  backup* no primeiro acesso.
+- **O CSV não tem senha.** É texto puro, feito para abrir direto no
+  Excel/LibreOffice, e o app avisa antes de exportar (o mesmo aviso fica
+  gravado no topo do arquivo, em uma linha `# AVISO;`). Guarde-o em local
+  seguro: ele contém todo o seu histórico. Não entram no CSV a foto do avatar,
+  o caminho da foto do cupom nem o texto bruto do OCR (`raw`), que só existem
+  no banco local.
+- **Por que não criptografar o CSV?** O app não tem servidor nem recuperação de
+  senha: uma senha esquecida significaria backup perdido para sempre, e um
+  arquivo cifrado deixaria de abrir em planilha. A proteção em repouso fica para
+  o lado do banco (criptografia/bloqueio do app), não do arquivo exportado.
 
 ## Gerando o APK de release
 
@@ -287,6 +322,7 @@ lib/
 
 test/                          # parser, parcelas, backup CSV, UI e auditorias (audit_probe*)
 tool/                          # generate_icon.py + install_release.sh (instala no usuário 0)
+.github/workflows/ci.yml       # analyze + testes a cada push/PR (Flutter 3.47.5)
 ```
 
 ## Permissões
