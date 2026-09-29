@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../models/models.dart';
 import '../services/receipt_parser.dart';
+import '../services/receipt_photo.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 
@@ -75,6 +78,16 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     return _padraoPara(widget.tipoInicial);
   }
   bool _saving = false;
+
+  /// Caminho da foto do cupom **existente no aparelho**, para a miniatura da
+  /// edição. `null` quando o lançamento não tem foto ou quando o arquivo já não
+  /// está mais lá (cache limpo por uma versão antiga do app, backup restaurado
+  /// sem a foto).
+  String? _fotoExistente;
+
+  /// `true` quando o lançamento foi salvo sem a foto do cupom porque a cópia
+  /// falhou — a tela avisa depois de fechar o formulário.
+  bool _fotoNaoGuardada = false;
 
   /// Estado dos campos no momento da abertura da tela: referência de
   /// [hasUnsavedChanges]. Um snapshot no `initState` evita comparar com
@@ -153,6 +166,22 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _formaAbertura = _forma;
     _tipoAbertura = _tipo;
     _dataHoraAbertura = _dataHora;
+    _carregarFotoExistente();
+  }
+
+  /// Confere se a foto do cupom do lançamento em edição ainda existe no
+  /// aparelho antes de montar a miniatura: evita `Image.file` apontando para
+  /// arquivo que não está mais lá.
+  Future<void> _carregarFotoExistente() async {
+    final path = widget.expense?.fotoPath;
+    if (path == null || path.trim().isEmpty) return;
+    try {
+      if (await File(path).exists() && mounted) {
+        setState(() => _fotoExistente = path);
+      }
+    } catch (_) {
+      // Foto ilegível não impede a edição: a tela segue sem a miniatura.
+    }
   }
 
   @override
@@ -196,7 +225,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final centavos = parseMoneyInput(_valor.text)!;
-    final novo = (widget.expense ?? _buildNew()).copyWith(
+    // A foto do cupom (quando veio do OCR) é copiada para os documentos do app
+    // só agora: cancelar o formulário não deixa arquivo órfão.
+    final base = widget.expense ?? await _buildNew();
+    final novo = base.copyWith(
       valorCentavos: centavos,
       dataHora: _dataHora,
       categoria: _categoria,
@@ -216,7 +248,16 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    // Aviso de parcelas criadas: aparece na tela anterior (Home).
+    // Avisos aparecem na tela anterior (Home).
+    if (_fotoNaoGuardada) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Lançamento salvo, mas a foto do cupom não pôde ser guardada.',
+          ),
+        ),
+      );
+    }
     if (!_isEdit && criados > 1) {
       final parcela = ReceiptParser.parseParcelaSuffix(novo.estabelecimento);
       messenger.showSnackBar(
@@ -230,7 +271,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     }
   }
 
-  Expense _buildNew() {
+  Future<Expense> _buildNew() async {
     final d = widget.fromDraft;
     return Expense(
       valorCentavos: 0,
@@ -239,9 +280,30 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       forma: _forma,
       tipo: _tipo,
       origem: d != null ? ExpenseOrigin.ocr : ExpenseOrigin.manual,
-      fotoPath: d?.fotoPath,
+      fotoPath: await _guardarFotoDoCupom(),
       rawText: d?.draft.textoOcr,
     );
+  }
+
+  /// Copia a foto do cupom do cache do `image_picker` para os documentos do
+  /// app e devolve o caminho definitivo — `null` quando não há foto (lançamento
+  /// manual) ou quando a cópia falha.
+  ///
+  /// A cópia temporária só é apagada depois que a definitiva existe: o OCR já
+  /// rodou e, a partir daqui, a foto oficial é a dos documentos do app
+  /// (`lib/services/receipt_photo.dart`).
+  Future<String?> _guardarFotoDoCupom() async {
+    final origem = widget.fromDraft?.fotoPath;
+    if (origem == null || origem.trim().isEmpty) return null;
+    try {
+      final destino =
+          await salvarFotoCupom(File(origem), await pastaFotosCupom());
+      await apagarCopiaTemporaria(origem);
+      return destino;
+    } catch (_) {
+      _fotoNaoGuardada = true;
+      return null;
+    }
   }
 
   Future<bool> _showCancelConfirmation() async {
@@ -454,6 +516,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                     ),
                   ],
                 ),
+              if (_fotoExistente != null) ...[
+                const SizedBox(height: 8),
+                _FotoCupomCard(_fotoExistente!),
+              ],
               const SizedBox(height: 16),
               FilledButton.icon(
                 icon: _saving
@@ -469,6 +535,66 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Miniatura da foto do cupom no formulário de edição: toque para ampliar.
+///
+/// A foto foi copiada para os documentos do app quando o lançamento do OCR foi
+/// salvo (`lib/services/receipt_photo.dart`); o `errorBuilder` cobre o caso do
+/// arquivo existir mas não poder ser decodificado (imagem corrompida, por
+/// exemplo), em vez de derrubar o build da tela.
+class _FotoCupomCard extends StatelessWidget {
+  final String caminho;
+
+  const _FotoCupomCard(this.caminho);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (dialogContext) => Dialog(
+            insetPadding: const EdgeInsets.all(16),
+            child: InteractiveViewer(
+              maxScale: 5,
+              child: Image.file(
+                File(caminho),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('A foto do cupom não pôde ser exibida.'),
+                ),
+              ),
+            ),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 160,
+              width: double.infinity,
+              child: Image.file(
+                File(caminho),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Text('A foto do cupom não pôde ser exibida.'),
+                ),
+              ),
+            ),
+            const ListTile(
+              leading: Icon(Icons.photo_camera_outlined),
+              title: Text('Foto do cupom'),
+              subtitle: Text('Toque para ampliar'),
+            ),
+          ],
         ),
       ),
     );

@@ -36,7 +36,13 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
   (`lib/screens/landing_screen.dart`) mostra avatar + nome e os botões
 - **Foto do cupom:** limite de 8 MB — imagens maiores (em geral vindas da
   galeria) são recusadas **antes** de decodificar/rodar o OCR, pois decodificar
-  aloca muito mais memória e pode travar o app em aparelhos simples.
+  aloca muito mais memória e pode travar o app em aparelhos simples. A foto
+  aprovada é **copiada para os documentos do app** quando o lançamento é salvo
+  (a cópia do `image_picker` fica no cache, que o sistema pode limpar) e aparece
+  na tela de edição — toque para ampliar
+  (`lib/services/receipt_photo.dart`). Excluir o lançamento apaga a foto; as
+  parcelas do mesmo cupom compartilham o arquivo, que só sai quando nenhum
+  lançamento o usa.
 - **Avatar:** tocar no avatar abre o menu — **emoticon** (atalhos mais usados
   **e** a grade de emojis do app, que já abre direto com todos: busca,
   categorias e recentes, sem depender do teclado do aparelho; guarda o
@@ -59,7 +65,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 116 testes (parser do cupom + parcelas + categorizador + UI)
+flutter test      # 130 testes (parser do cupom + parcelas + categorizador + UI)
 ```
 
 O CI (`.github/workflows/ci.yml`) roda exatamente esses dois comandos a cada
@@ -308,6 +314,7 @@ lib/
 ├── services/
 │   ├── ocr_service.dart       # ML Kit Text Recognition (on-device)
 │   ├── receipt_parser.dart    # parser heurístico de cupom fiscal BR
+│   ├── receipt_photo.dart     # cópia durável da foto do cupom + limpeza
 │   ├── categorizer.dart       # regras por palavra-chave + memória
 │   └── ai_fallback.dart       # extensão opcional p/ IA (desligada por padrão)
 ├── screens/

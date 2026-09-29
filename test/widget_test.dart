@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart'
     hide Category;
@@ -8,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:mango/db/db.dart';
 import 'package:mango/main.dart';
@@ -725,6 +728,80 @@ void main() async {
     });
   });
 
+  group('Foto do cupom no lançamento', () {
+    Expense lancamentoComFoto(String? fotoPath) => Expense(
+          id: 1,
+          valorCentavos: 1500,
+          dataHora: DateTime(2026, 3, 20, 12),
+          categoria: Category.outros,
+          forma: PaymentMethod.dinheiro,
+          estabelecimento: 'PADARIA',
+          fotoPath: fotoPath,
+        );
+
+    /// Abre o formulário em edição e deixa a checagem do arquivo terminar: ela
+    /// é I/O de verdade (o `runAsync` libera o event loop) antes de conferir a
+    /// tela.
+    Future<void> abrirEdicao(WidgetTester tester, Expense expense) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+          ],
+          child: _makeApp(home: ExpenseFormScreen(expense: expense)),
+        ),
+      );
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('lançamento sem foto não mostra a miniatura', (tester) async {
+      await abrirEdicao(tester, lancamentoComFoto(null));
+
+      expect(find.text('Foto do cupom'), findsNothing);
+      expect(find.text('Toque para ampliar'), findsNothing);
+    });
+
+    testWidgets('foto que já não está no aparelho não mostra a miniatura',
+        (tester) async {
+      await abrirEdicao(tester, lancamentoComFoto('/nao/existe/cupom_1.jpg'));
+
+      expect(find.text('Foto do cupom'), findsNothing);
+    });
+
+    testWidgets('foto no aparelho mostra a miniatura e amplia ao tocar',
+        (tester) async {
+      Directory? pasta;
+      await tester.runAsync(() async {
+        pasta = await Directory.systemTemp.createTemp('mango_cupom_ui_');
+        File(p.join(pasta!.path, 'cupom_1.jpg'))
+            .writeAsBytesSync(base64Decode(_pngUmPixel));
+      });
+      addTearDown(() {
+        if (pasta != null && pasta!.existsSync()) {
+          pasta!.deleteSync(recursive: true);
+        }
+      });
+
+      await abrirEdicao(
+          tester, lancamentoComFoto(p.join(pasta!.path, 'cupom_1.jpg')));
+
+      expect(find.text('Foto do cupom'), findsOneWidget);
+      expect(find.text('Toque para ampliar'), findsOneWidget);
+
+      // O cartão fica abaixo da área visível (a viewport de teste tem 600px):
+      // rola até ele antes de tocar, senão o tap erra o alvo.
+      await tester.ensureVisible(find.text('Foto do cupom'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Foto do cupom'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+    });
+  });
+
   group('Tela inicial (landing)', () {
     Future<void> abrirTelaInicial(
       WidgetTester tester, {
@@ -1232,6 +1309,11 @@ void main() async {
     });
   });
 }
+
+/// PNG 1x1 válido (transparente), em base64: usado para o widget test da
+/// miniatura da foto do cupom precisar de um arquivo de imagem de verdade.
+const String _pngUmPixel =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=';
 
 Widget _makeApp({Widget? home}) => MaterialApp(
       home: home ?? const HomeScreen(),

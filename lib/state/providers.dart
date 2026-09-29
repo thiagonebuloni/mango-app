@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../db/db.dart';
 import '../models/models.dart';
 import '../services/receipt_parser.dart';
+import '../services/receipt_photo.dart';
 
 /// Estado reativo dos gastos: carrega do SQLite e re-carrega após mutações.
 class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
@@ -44,7 +45,26 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
   }
 
   Future<void> delete(int id) async {
+    // A foto do cupom é **compartilhada** pelas parcelas do mesmo lançamento
+    // ("LOJA 1/10", "2/10"...): o arquivo só é apagado quando nenhum outro
+    // lançamento ainda aponta para ele.
+    final atuais = state.value ?? const <Expense>[];
+    Expense? alvo;
+    for (final e in atuais) {
+      if (e.id == id) alvo = e;
+    }
     await DBHelper.instance.deleteExpense(id);
+    final foto = alvo?.fotoPath;
+    if (foto != null && foto.trim().isNotEmpty) {
+      var aindaUsada = false;
+      for (final e in atuais) {
+        if (e.id != id && e.fotoPath == foto) {
+          aindaUsada = true;
+          break;
+        }
+      }
+      if (!aindaUsada) await apagarFotoCupom(foto);
+    }
     await _reload();
   }
 
