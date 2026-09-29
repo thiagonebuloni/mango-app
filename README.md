@@ -1,3 +1,7 @@
+<p>
+<img src="assets/icon/app_icon_master.png" width="128" height="128" align="center"/>
+<p/>
+
 # Mango
 
 App mobile (Flutter) para registrar gastos, organizá-los em categorias e somar
