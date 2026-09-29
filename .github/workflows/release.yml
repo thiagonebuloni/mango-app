@@ -1,0 +1,188 @@
+name: Release
+
+# Publica a Release do GitHub a cada tag `v*`: repete analyze + testes (a tag
+# não dispara o CI de branches), confere tag × pubspec × CHANGELOG, monta o
+# APK de release assinado com a chave própria (Secrets), valida certificado e
+# permissões (o app é offline) e cria a Release com o APK e as notas do
+# CHANGELOG. `workflow_dispatch` serve de ensaio: builda e sobe o APK como
+# artefato, sem criar Release. Os 4 Secrets estão no README, seção
+# "Segredos do GitHub Actions".
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-e-release:
+    name: build, valida e publica
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17: o projeto compila com source/targetCompatibility 17; o cache
+      # do Gradle corta o download das dependências Android no primeiro run.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      # Mesmo Flutter fixado do CI (README: 3.47.5 / Dart 3.12).
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      # Tag publicada tem que bater com o pubspec (o versionName do APK vem
+      # de lá) e o CHANGELOG precisa da seção — melhor falhar aqui do que
+      # publicar uma Release errada.
+      - name: Confere tag × pubspec × CHANGELOG
+        if: github.ref_type == 'tag'
+        run: |
+          VER="$(sed -n 's/^version: *//p' pubspec.yaml)"; VER="${VER%%+*}"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' ≠ pubspec '$VER'. Suba o pubspec.yaml antes de taggear."
+            exit 1
+          fi
+          if ! grep -q "^## \[$VER\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md não tem a seção '## [$VER]'."
+            exit 1
+          fi
+          echo "VER=$VER" >> "$GITHUB_ENV"
+
+      - name: Versão do pubspec (ensaio sem tag)
+        if: github.ref_type != 'tag'
+        run: |
+          VER="$(sed -n 's/^version: *//p' pubspec.yaml)"; VER="${VER%%+*}"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+      # Falha cedo e com instrução, em vez do erro do Gradle no meio do build.
+      - name: Confere os Secrets de assinatura
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_SENHA: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_SENHA_CHAVE: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          faltando=""
+          [ -z "$KS_B64" ] && faltando="$faltando ANDROID_KEYSTORE_BASE64"
+          [ -z "$KS_SENHA" ] && faltando="$faltando ANDROID_KEYSTORE_PASSWORD"
+          [ -z "$KS_ALIAS" ] && faltando="$faltando ANDROID_KEY_ALIAS"
+          [ -z "$KS_SENHA_CHAVE" ] && faltando="$faltando ANDROID_KEY_PASSWORD"
+          if [ -n "$faltando" ]; then
+            echo "::error::Secrets ausentes:$faltando — rode os comandos da seção 'Segredos do GitHub Actions' do README."
+            exit 1
+          fi
+
+      # Mesma estrutura do android/key.properties local (fora do Git); o
+      # build.gradle.kts valida senha e alias antes de empacotar.
+      - name: Materializa o keystore e o android/key.properties
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_SENHA: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_SENHA_CHAVE: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          printf '%s' "$KS_B64" | tr -d '\r\n' | base64 -d > "$RUNNER_TEMP/mango-release.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/mango-release.jks" "$KS_SENHA" "$KS_ALIAS" "$KS_SENHA_CHAVE" \
+            > android/key.properties
+
+      - name: Aceita as licenças do Android SDK
+        run: yes | flutter doctor --android-licenses || true
+
+      - name: Build do APK de release
+        run: flutter build apk --release
+      # O certificado tem que ser o da chave própria (nunca a debug, que é
+      # pública) e o APK não pode sair com permissão de rede — a promessa de
+      # offline do app, verificada em cada release.
+      - name: Valida assinatura e permissões; prepara o anexo
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BT="$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/*/ | sort -V | tail -1)"
+          "$BT/apksigner" verify --print-certs "$APK" | tee "$RUNNER_TEMP/certs.txt"
+          if ! grep -q '1f6fae8228e38a9d8c582a3190ae1b56e39e70bc89c31f44693ac5a226bc833c' "$RUNNER_TEMP/certs.txt"; then
+            echo "::error::Certificado de assinatura diferente do esperado (chave própria do Mango)."
+            exit 1
+          fi
+          PERMS="$("$BT/aapt2" dump permissions "$APK")"
+          echo "$PERMS"
+          if grep -qiE 'INTERNET|ACCESS_NETWORK_STATE' <<< "$PERMS"; then
+            echo "::error::APK com permissão de rede — o manifesto mesclado regrediu."
+            exit 1
+          fi
+          cp "$APK" "$RUNNER_TEMP/mango-$VER.apk"
+          sha256sum "$RUNNER_TEMP/mango-$VER.apk" | cut -d' ' -f1 > "$RUNNER_TEMP/sha256.txt"
+
+      - name: Monta as notas (seção do CHANGELOG + instalação + hash)
+        run: |
+          NOTAS="$RUNNER_TEMP/notas.md"
+          awk -v ver="$VER" '
+            index($0, "## [" ver "]") == 1 { dentro = 1; next }
+            dentro && /^## \[/ { exit }
+            dentro { print }
+          ' CHANGELOG.md > "$NOTAS"
+          if [ ! -s "$NOTAS" ]; then
+            echo "Histórico completo em [CHANGELOG.md](https://github.com/thiagonebuloni/mango-app/blob/main/CHANGELOG.md)." > "$NOTAS"
+          fi
+          HASH="$(cat "$RUNNER_TEMP/sha256.txt")"
+          cat >> "$NOTAS" <<'FIM'
+
+          ## Instalação
+
+          1. Baixe `__VER__.apk` abaixo e abra o arquivo no aparelho.
+          2. Permita "instalar apps desconhecidos" quando o Android pedir.
+          3. Atualização por cima: quem já tem o Mango instalado não perde dados.
+
+          ## Verificação
+
+          - SHA-256: `__HASH__`
+          - Assinatura: chave própria do projeto (`CN=Thiago Nebuloni, OU=Mango App`); sem permissão de internet.
+          FIM
+          sed -i "s/__VER__/mango-$VER/g; s/__HASH__/$HASH/g" "$NOTAS"
+
+      - name: Cria a Release com o APK (só em tag)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSET="$RUNNER_TEMP/mango-$VER.apk"
+          ARGS=(--title "Mango $VER" --notes-file "$RUNNER_TEMP/notas.md")
+          case "$VER" in *-*) ARGS+=(--prerelease) ;; *) ARGS+=(--latest) ;; esac
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Re-execução do job: atualiza o anexo e as notas da Release existente.
+            gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+            gh release edit "$GITHUB_REF_NAME" "${ARGS[@]}"
+          else
+            gh release create "$GITHUB_REF_NAME" "$ASSET" "${ARGS[@]}"
+          fi
+          gh release view "$GITHUB_REF_NAME" --json url,assets \
+            -q '"Release publicada: \(.url) — " + ([.assets[].name] | join(", "))'
+
+      # Toda execução (tag ou ensaio) guarda o APK como artefato.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mango-${{ env.VER }}
+          path: ${{ runner.temp }}/mango-${{ env.VER }}.apk
+          if-no-files-found: error
+
+

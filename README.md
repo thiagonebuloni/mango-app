@@ -233,7 +233,17 @@ $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
    git push origin v1.0.1
    ```
 
-5. Publique a **Release** no GitHub com o APK (o nome do anexo leva a versão):
+5. A tag dispara o workflow **Release** (`.github/workflows/release.yml`),
+   que repete `analyze` + `testes`, confere se a tag bate com o
+   `pubspec.yaml` e com a seção do `CHANGELOG`, monta o APK assinado com a
+   chave própria (via **Secrets**, veja a próxima seção), valida o
+   certificado e a ausência de permissão de rede e publica a Release `v…`
+   com o anexo `mango-<versão>.apk` (notas = seção do CHANGELOG +
+   instalação + SHA-256). Sem os Secrets o passo falha cedo, com
+   instrução. Ensaio sem taggear: `gh workflow run release.yml` (builda e
+   sobe o APK como artefato, sem criar Release).
+
+6. **Alternativa manual** (sem CI), com o APK local:
 
    ```bash
    cp build/app/outputs/flutter-apk/app-release.apk /tmp/mango-1.0.1.apk
@@ -249,6 +259,45 @@ $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
 A janela *Sobre o Mango* mostra a versão lida do **próprio app instalado**
 (`lib/services/app_info.dart`), então ela nunca fica defasada em relação ao
 APK.
+
+### Segredos do GitHub Actions (build + release automático)
+
+O workflow **Release** precisa de 4 secrets — são os mesmos dados do
+`android/key.properties` local; o keystore em si **nunca** entra no Git:
+
+| Secret | Conteúdo |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | o keystore `.jks` codificado em base64 (uma linha só) |
+| `ANDROID_KEYSTORE_PASSWORD` | a senha do keystore (num PKCS12, a única) |
+| `ANDROID_KEY_ALIAS` | `mango` |
+| `ANDROID_KEY_PASSWORD` | igual à senha do keystore (PKCS12 tem senha única) |
+
+Com o `gh` autenticado (troque as senhas pelos valores reais):
+
+```bash
+# 1. codifica o keystore no seu terminal (ele sai daqui só em base64)
+base64 -w0 ~/mango-release.jks > /tmp/keystore.b64             # Linux
+base64 -i ~/mango-release.jks | tr -d '\n' > /tmp/keystore.b64  # macOS
+
+# 2. cria os 4 secrets no repositório
+gh secret set ANDROID_KEYSTORE_BASE64 < /tmp/keystore.b64
+gh secret set ANDROID_KEYSTORE_PASSWORD --body '<senha-do-keystore>'
+gh secret set ANDROID_KEY_ALIAS --body 'mango'
+gh secret set ANDROID_KEY_PASSWORD --body '<mesma-senha-do-keystore>'
+
+# 3. confere e limpa
+gh secret list && rm /tmp/keystore.b64
+```
+
+Sem `gh`: no repositório GitHub, **Settings → Secrets and variables →
+Actions → New repository secret**, um por linha da tabela.
+
+Segurança: os secrets só ficam visíveis para workflows deste repositório —
+nunca para pull requests de fork — e aparecem mascarados nos logs. Quem tem
+permissão de *write* poderia lê-los alterando um workflow, então mantenha a
+lista de colaboradores curta. **Guarde o `.jks` e as senhas fora do GitHub
+também**: sem eles não há como assinar atualizações do app (e o Android
+recusa um APK assinado com chave diferente da instalada).
 
 ## Licença e privacidade
 
@@ -385,6 +434,7 @@ lib/
 test/                          # parser, parcelas, backup CSV, UI e auditorias (audit_probe*)
 tool/                          # generate_icon.py + install_release.sh (instala no usuário 0)
 .github/workflows/ci.yml       # analyze + testes a cada push/PR (Flutter 3.47.5)
+.github/workflows/release.yml  # tag v*: build assinado + Release com o APK
 ```
 
 ## Permissões
