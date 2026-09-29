@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../db/db.dart';
 import '../models/models.dart';
 import '../services/categorizer.dart';
+import '../services/crash_log.dart';
 import '../services/ocr_service.dart';
 import '../services/receipt_parser.dart';
 import 'expense_form_screen.dart';
@@ -89,11 +90,14 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           ),
         ),
       );
-    } catch (e) {
+    } catch (erro, pilha) {
+      // Falha no fluxo do cupom (OCR, picker ou decode): registra no log
+      // local, que em release é o único rastro que sobra — o logcat não.
+      registrarFalha(erro, pilha, contexto: 'ocr');
       if (!mounted) return;
       setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao ler o cupom: $e')),
+        SnackBar(content: Text('Falha ao ler o cupom: $erro')),
       );
       // Fallback: formulário manual em branco.
       Navigator.of(context).pushReplacement(

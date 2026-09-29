@@ -16,11 +16,13 @@ import 'package:mango/db/db.dart';
 import 'package:mango/main.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/screens/capture_screen.dart';
+import 'package:mango/screens/diagnostico_screen.dart';
 import 'package:mango/screens/expense_form_screen.dart';
 import 'package:mango/screens/home_screen.dart';
 import 'package:mango/screens/landing_screen.dart';
 import 'package:mango/screens/profile_setup_screen.dart';
 import 'package:mango/screens/reports_screen.dart';
+import 'package:mango/services/crash_log.dart';
 import 'package:mango/state/providers.dart';
 import 'package:mango/theme/app_theme.dart';
 import 'package:mango/widgets/avatar.dart';
@@ -899,7 +901,7 @@ void main() async {
     testWidgets('"Sobre o Mango" mostra a versão do próprio app',
         (tester) async {
       // A versão vem do pacote instalado: o mock evita depender do plugin e
-      // fixa o valor esperado (o `pubspec.yaml` está em 1.0.0+1).
+      // fixa um valor qualquer de propósito — não acompanha o `pubspec.yaml`.
       PackageInfo.setMockInitialValues(
         appName: 'Mango',
         packageName: 'br.com.mango.mango',
@@ -1332,6 +1334,150 @@ void main() async {
         (bgClaro.decoration! as BoxDecoration).color,
         isNot(Colors.transparent),
       );
+    });
+  });
+
+  group('Diagnóstico (falhas locais)', () {
+    /// Diretório temporário para o log, apagado ao fim do teste.
+    Directory novoDir() {
+      final dir = Directory.systemTemp.createTempSync('mango_diag_test');
+      addTearDown(() {
+        if (dir.existsSync()) dir.deleteSync(recursive: true);
+      });
+      return dir;
+    }
+
+    /// Grava eventos no log. A escrita é I/O de verdade: o `runAsync` libera
+    /// o event loop — o relógio falso do teste não entrega a escrita sozinho.
+    Future<void> semear(
+      WidgetTester tester,
+      Directory dir,
+      List<String> erros,
+    ) async {
+      reiniciarFila();
+      await tester.runAsync(() async {
+        for (final erro in erros) {
+          await registrarFalha(erro, null, dir: dir);
+        }
+        await aguardarEscritas();
+      });
+    }
+
+    /// Abre a tela pelo caminho do usuário: Menu → Diagnóstico.
+    Future<void> abrirPeloMenu(WidgetTester tester) async {
+      reiniciarFila();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider
+                .overrideWith(() => _FakeProfileNotifier(_perfilTeste)),
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      // O sheet é rolável: "Diagnóstico" pode nascer abaixo da dobra.
+      await tester.ensureVisible(find.text('Diagnóstico'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Diagnóstico'));
+      // A tela lê o arquivo no initState: o `runAsync` deixa a I/O terminar
+      // e os pumps adiantam a rota — um pumpAndSettle aqui giraria à toa no
+      // spinner enquanto a leitura não volta.
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    /// Espera a I/O real terminar. Cada `runAsync` entrega **um** passo de
+    /// arquivo (criar → existir → ler/apagar) e o `pump` consolida o passo
+    /// seguinte — sem isso o relógio falso fica girando no spinner e o
+    /// pumpAndSettle estoura o tempo (mesmo truque do grupo "Foto do cupom").
+    Future<void> aguardarLeitura(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> abrirDireto(WidgetTester tester, Directory dir) async {
+      reiniciarFila();
+      await tester.pumpWidget(_makeApp(home: DiagnosticoScreen(dir: dir)));
+      await aguardarLeitura(tester);
+    }
+
+    testWidgets('item no menu abre a tela de Diagnóstico', (tester) async {
+      await abrirPeloMenu(tester);
+
+      expect(find.text('Diagnóstico'), findsOneWidget);
+      // A tela deixa claro que nada sai sozinho do aparelho.
+      expect(find.textContaining('Nada é enviado'), findsOneWidget);
+    });
+
+    testWidgets('sem falhas → estado vazio e botões desativados',
+        (tester) async {
+      await abrirDireto(tester, novoDir());
+
+      expect(find.text('Nenhuma falha registrada'), findsOneWidget);
+      final compartilhar = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Compartilhar'),
+      );
+      expect(compartilhar.onPressed, isNull);
+    });
+
+    testWidgets('falha registrada aparece; Compartilhar avisa se falhar',
+        (tester) async {
+      final dir = novoDir();
+      await semear(tester, dir, ['boom simulado', 'boom simulado']);
+
+      await abrirDireto(tester, dir);
+
+      // Duas ocorrências seguidas viram uma linha com ×2.
+      expect(find.textContaining('boom simulado (×2)'), findsOneWidget);
+
+      // Sem app de compartilhamento (plugin) o toque não pode travar: ele
+      // precisa avisar em vez de falhar em silêncio.
+      await tester.tap(find.text('Compartilhar'));
+      await aguardarLeitura(tester);
+      expect(
+        find.textContaining('Não foi possível compartilhar'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Limpar confirma e apaga o registro', (tester) async {
+      final dir = novoDir();
+      await semear(tester, dir, ['falha para apagar']);
+
+      await abrirDireto(tester, dir);
+      expect(find.textContaining('falha para apagar'), findsOneWidget);
+
+      await tester.tap(find.text('Limpar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Apagar o registro?'), findsOneWidget);
+
+      // A confirmação apaga o arquivo de verdade (vários passos de I/O).
+      await tester.tap(find.text('Apagar'));
+      await aguardarLeitura(tester);
+
+      expect(find.text('Nenhuma falha registrada'), findsOneWidget);
+      expect(find.text('Registro de falhas apagado.'), findsOneWidget);
+      // A checagem do arquivo também é I/O real: dentro do runAsync.
+      final depois =
+          await tester.runAsync(() => lerFalhas(dir: dir));
+      expect(depois, isEmpty);
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
     });
   });
 }

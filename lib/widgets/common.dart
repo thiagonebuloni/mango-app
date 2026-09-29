@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../db/db.dart';
 import '../models/models.dart';
 import '../screens/capture_screen.dart';
+import '../screens/diagnostico_screen.dart';
 import '../screens/expense_form_screen.dart';
 import '../screens/profile_setup_screen.dart';
 import '../services/app_info.dart';
@@ -358,6 +359,19 @@ void showMenuApp(
               onTap: () {
                 Navigator.pop(sheetContext);
                 _importarCsv(context, ref);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Diagnóstico'),
+              subtitle: const Text('Falhas registradas neste aparelho'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DiagnosticoScreen(),
+                  ),
+                );
               },
             ),
             const Divider(height: 1),
