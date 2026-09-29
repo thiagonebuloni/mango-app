@@ -68,6 +68,17 @@ void main() {
       expect(CsvBackup.import(claro).perfil?.temaClaro, isTrue);
     });
 
+    test('aviso de texto puro vai no arquivo e não quebra o import', () {
+      final csv = CsvBackup.export([gasto()], perfil: perfil);
+      // O usuário vê o aviso em qualquer editor/planilha...
+      expect(csv, contains(CsvBackup.csvAviso));
+      // ...e a linha `#` continua sendo ignorada pelo importador.
+      final result = CsvBackup.import(csv);
+      expect(result.expenses, hasLength(1));
+      expect(result.skipped, 0);
+      expect(result.perfil?.nome, 'Ana Souza');
+    });
+
     test('nome com ; e aspas sobrevive ao round-trip', () {
       const esquisito = UserProfile(
         nome: 'Ana; "Souza"',

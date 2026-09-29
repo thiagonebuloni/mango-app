@@ -248,7 +248,8 @@ class DBHelper {
 
 /// Backup CSV dos lançamentos (+ perfil do usuário no topo).
 ///
-/// Linhas `#` (ex.: `# MANGO_BACKUP v2` e `# PERFIL;...`) são comentários:
+/// Linhas `#` (ex.: `# MANGO_BACKUP v2`, `# AVISO;...` e `# PERFIL;...`) são
+/// comentários:
 /// ignoradas por planilhas e por backups antigos. O perfil guarda
 /// `nome/avatar/corFundo (ARGB)/tema (claro|escuro)`; a foto do avatar não
 /// entra no backup (caminho local) e deve ser recolocada na edição final.
@@ -263,6 +264,16 @@ class CsvBackup {
       'tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem';
   static const backupMarker = '# MANGO_BACKUP v2';
   static const perfilMarker = '# PERFIL;';
+
+  /// Aviso gravado no topo de todo arquivo exportado: o backup é **texto
+  /// puro, sem senha**.
+  ///
+  /// Fica como linha de comentário (`#`), então quem abrir o CSV no
+  /// Excel/LibreOffice lê o aviso e o importador segue ignorando a linha —
+  /// a decisão de não criptografar o CSV é consciente (senha esquecida =
+  /// backup perdido num app sem servidor) e está documentada no README.
+  static const csvAviso =
+      '# AVISO;Backup em texto puro, sem senha. Guarde em local seguro.';
 
   /// Tamanho máximo aceito no import (A2).
   ///
@@ -303,6 +314,11 @@ class CsvBackup {
     final sorted = expenses.toList()
       ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
     final buf = StringBuffer(backupMarker);
+    // Aviso de que o arquivo é texto puro: aparece para quem abrir o CSV em
+    // qualquer editor/planilha e é ignorado pelo import (linha de comentário).
+    buf
+      ..write('\n')
+      ..write(csvAviso);
     if (perfil != null) {
       buf
         ..write('\n')

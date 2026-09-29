@@ -416,8 +416,15 @@ Future<String> lerBackupCsv(Stream<List<int>> bytes) async {
 
 /// Exporta os lançamentos em CSV e abre a folha de compartilhamento do
 /// sistema (salvar em arquivos, enviar por e-mail/mensageiro etc.).
+///
+/// Antes de gerar o arquivo, confirma com o usuário: o backup é **texto puro,
+/// sem senha**, e sai do app pela folha de compartilhamento (nuvem, mensageiro,
+/// e-mail...). O mesmo aviso vai gravado no topo do arquivo
+/// ([CsvBackup.csvAviso]), para quem abri-lo depois.
 Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
+  if (!await _confirmarExportacao(context)) return;
+  if (!context.mounted) return;
   try {
     final expenses = ref.read(expensesProvider).value ?? const <Expense>[];
     final perfil = ref.read(profileProvider).value;
@@ -436,9 +443,44 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
             : 'Backup com ${expenses.length} lançamento(s) do Mango de ${perfil.nome}.',
       ),
     );
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Backup sem senha (texto puro): guarde o arquivo em local seguro.',
+        ),
+      ),
+    );
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text('Erro ao exportar: $e')));
   }
+}
+
+/// Pergunta se o usuário quer mesmo exportar, explicando que o CSV é texto
+/// puro (sem senha) e vai para onde ele escolher na folha de compartilhamento.
+/// `true` = seguir com a exportação.
+Future<bool> _confirmarExportacao(BuildContext context) async {
+  final confirmado = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Exportar backup?'),
+      content: const Text(
+        'O arquivo .csv é texto puro, sem senha: quem tiver acesso a ele vê '
+        'todo o seu histórico. Salve em um local seguro e evite enviá-lo para '
+        'conversas ou pastas compartilhadas.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Exportar'),
+        ),
+      ],
+    ),
+  );
+  return confirmado == true;
 }
 
 /// Escolhe um CSV e agrega os lançamentos ao app, sem apagar nada.
