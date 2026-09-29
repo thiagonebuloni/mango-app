@@ -6,6 +6,23 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/) — o `+N` do
 `pubspec.yaml` é o *build number* do Android e **precisa** aumentar a cada
 release publicada.
 
+## [1.1.0] - 2026-09-29
+
+### Adicionado
+
+- **Registro local de falhas**: erros do app (build/layout, exceções não
+  tratadas e falhas do OCR) são gravados em `falhas.jsonl` na área privada do
+  aparelho, com rotação de 200 KB (saem as falhas mais antigas) e falhas
+  repetidas em sequência somadas numa linha só (`×N`). Nada é enviado
+  automaticamente — o APK de release continua sem permissão de internet.
+- Tela **Diagnóstico** (menu → *Diagnóstico*): lista as falhas com hora,
+  contexto e pilha de chamadas, e permite **compartilhar** (folha de
+  compartilhamento do sistema), **copiar** ou **limpar** o registro; os
+  botões ficam desativados enquanto não há falhas.
+- Mensagem amigável no lugar do quadro cinza das telas quebradas em release,
+  apontando para o *Diagnóstico* — em debug mantém a tela vermelha de
+  desenvolvimento.
+
 ## [1.0.0] - 2026-09-28
 
 Primeira versão publicada.

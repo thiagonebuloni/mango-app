@@ -65,7 +65,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 135 testes (parser do cupom + parcelas + categorizador + UI)
+flutter test      # 150 testes (parser do cupom + parcelas + categorizador + log de falhas + UI)
 ```
 
 O CI (`.github/workflows/ci.yml`) roda exatamente esses dois comandos a cada
@@ -109,6 +109,12 @@ de pagamento (mês / 30 dias / ano / intervalo custom).
   seguro: ele contém todo o seu histórico. Não entram no CSV a foto do avatar,
   o caminho da foto do cupom nem o texto bruto do OCR (`raw`), que só existem
   no banco local.
+- **Registro de falhas local.** Quando algo quebra, o detalhe (erro, pilha e
+  hora) é gravado em `falhas.jsonl` na área privada do app. Nunca sai de lá
+  sozinho: menu → *Diagnóstico* lista as falhas e só compartilha quando você
+  toca em *Compartilhar* e escolhe o destino na folha do sistema. O registro
+  **não** entra no CSV, é limitado a 200 KB (falhas antigas saem) e falhas
+  repetidas em sequência viram uma linha só com `×N`.
 - **Por que não criptografar o CSV?** O app não tem servidor nem recuperação de
   senha: uma senha esquecida significaria backup perdido para sempre, e um
   arquivo cifrado deixaria de abrir em planilha. A proteção em repouso fica para
@@ -346,6 +352,7 @@ lib/
 │   ├── receipt_parser.dart    # parser heurístico de cupom fiscal BR
 │   ├── receipt_photo.dart     # cópia durável da foto do cupom + limpeza
 │   ├── categorizer.dart       # regras por palavra-chave + memória
+│   ├── crash_log.dart         # log local de falhas (falhas.jsonl) + fila
 │   └── ai_fallback.dart       # extensão opcional p/ IA (desligada por padrão)
 ├── screens/
 │   ├── root_nav.dart          # abas Gastos / Relatórios (deslize)
@@ -354,7 +361,8 @@ lib/
 │   ├── home_screen.dart       # lista de gastos + resumo
 │   ├── capture_screen.dart    # foto do cupom + OCR
 │   ├── expense_form_screen.dart   # confirmação/edição do gasto
-│   └── reports_screen.dart    # relatórios por período
+│   ├── reports_screen.dart    # relatórios por período
+│   └── diagnostico_screen.dart # falhas locais: listar / compartilhar / limpar
 └── widgets/common.dart        # formatação BRL, ícones/cores, FAB, tiles
 
 test/                          # parser, parcelas, backup CSV, UI e auditorias (audit_probe*)

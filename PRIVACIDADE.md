@@ -1,6 +1,6 @@
 # Política de privacidade — Mango
 
-**Última atualização:** 28 de setembro de 2026
+**Última atualização:** 29 de setembro de 2026
 
 O Mango é um aplicativo de controle de gastos pessoais que funciona **100%
 offline**. Esta política descreve, de forma direta, quais dados o app usa e
@@ -14,6 +14,7 @@ para onde eles vão: **nenhum dado sai do seu aparelho**.
 | Texto lido dos cupons (OCR) | Mesmo banco, coluna `raw`, na área privada do app |
 | Fotos dos cupons | Área privada do app (documentos), apagadas quando o lançamento é excluído |
 | Perfil (nome, emoticon, foto do avatar, cores e tema) | Mesmo banco |
+| Registro de falhas do app (erro, pilha, hora) | Arquivo `falhas.jsonl` na área privada do app — listado em menu → *Diagnóstico* e fora do CSV |
 
 Não há servidor, conta de usuário, cadastro, login nem sincronização. O app não
 declara a permissão de **internet** no APK de release, ou seja, não tem como
@@ -23,7 +24,10 @@ enviar dados para lugar nenhum.
 
 - Não há coleta de dados pessoais, localização, contatos, identificadores de
   publicidade ou uso;
-- Não há analytics, crash reporting, anúncios ou SDKs de rastreamento;
+- Não há analytics, anúncios, SDKs de rastreamento nem envio automático de
+  falhas para servidores (*crash reporting*): o registro de erros do app é
+  **local** (ver §1) e só sai do aparelho se você compartilhar pelo menu
+  *Diagnóstico*;
 - Não há compartilhamento de dados com terceiros.
 
 ## 3. Permissões e acesso
