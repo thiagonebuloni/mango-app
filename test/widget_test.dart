@@ -25,6 +25,7 @@ import 'package:mango/state/providers.dart';
 import 'package:mango/theme/app_theme.dart';
 import 'package:mango/widgets/avatar.dart';
 import 'package:mango/widgets/common.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// Perfil já cadastrado (casos de "demais aberturas" do app).
 const _perfilTeste = UserProfile(
@@ -893,6 +894,31 @@ void main() async {
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Importar em CSV'), findsOneWidget);
       expect(find.text('Sobre o Mango'), findsOneWidget);
+    });
+
+    testWidgets('"Sobre o Mango" mostra a versão do próprio app',
+        (tester) async {
+      // A versão vem do pacote instalado: o mock evita depender do plugin e
+      // fixa o valor esperado (o `pubspec.yaml` está em 1.0.0+1).
+      PackageInfo.setMockInitialValues(
+        appName: 'Mango',
+        packageName: 'br.com.mango.mango',
+        version: '1.0.0',
+        buildNumber: '1',
+        buildSignature: '',
+      );
+      await abrirTelaInicial(tester);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      // O menu é mais alto que a viewport de teste (600px) e "Sobre o Mango" é
+      // o último item: rola até ele antes de tocar, senão o tap erra o alvo.
+      await tester.ensureVisible(find.text('Sobre o Mango'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sobre o Mango'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1.0.0 (1)'), findsOneWidget);
     });
 
     testWidgets('telas Gastos e Relatórios têm ícone de menu no AppBar',

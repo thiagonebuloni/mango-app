@@ -14,6 +14,7 @@ import '../models/models.dart';
 import '../screens/capture_screen.dart';
 import '../screens/expense_form_screen.dart';
 import '../screens/profile_setup_screen.dart';
+import '../services/app_info.dart';
 import '../state/providers.dart';
 
 final _brl = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$', decimalDigits: 2);
@@ -583,11 +584,18 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   );
 }
 
-void _sobre(BuildContext context) {
+/// Janela "Sobre o Mango".
+///
+/// A versão é lida do próprio app ([versaoDoApp]): o valor já esteve fixo no
+/// código e passaria a mentir na primeira subida de versão. Quando ela não
+/// pode ser lida, a linha da versão simplesmente não aparece.
+Future<void> _sobre(BuildContext context) async {
+  final versao = await versaoDoApp();
+  if (!context.mounted) return;
   showAboutDialog(
     context: context,
     applicationName: 'Mango',
-    applicationVersion: '1.0.0',
+    applicationVersion: versao,
     applicationIcon: const Icon(Icons.account_balance_wallet, size: 40),
     children: const [
       Text(
