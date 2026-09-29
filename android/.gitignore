@@ -7,6 +7,9 @@ gradle-wrapper.jar
 GeneratedPluginRegistrant.java
 .cxx/
 
+# Sessões do compilador Kotlin (build regenerável)
+/.kotlin
+
 # Remember to never publicly share your keystore.
 # See https://flutter.dev/to/reference-keystore
 key.properties
