@@ -1,4 +1,18 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- O app é 100% local e não faz requisição de rede: nenhuma biblioteca
+         tem motivo para abrir soquete. As permissões abaixo entram no APK
+         vindas de `com.google.android.datatransport` (telemetria do Google que
+         o ML Kit arrasta como dependência) e não do código do Mango — o OCR
+         roda no aparelho, com o modelo empacotado no APK. Removê-las garante,
+         na prática, que nada do app sai do aparelho.
+         No build de **debug** a permissão INTERNET continua valendo: quem a
+         declara ali é `android/app/src/debug/AndroidManifest.xml`, exigido pelo
+         Flutter para hot reload/depuração. -->
+    <uses-permission android:name="android.permission.INTERNET"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
     <!-- Dados do app fora do backup na nuvem: o banco `mango.db` guarda o
          texto bruto de cada cupom (coluna `raw`), que pode conter CPF impresso
          na nota, e o app promete dados 100% locais. O backup oficial é o CSV
