@@ -13,6 +13,9 @@
         tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
+    <!-- Biometria local (digital/rosto) para o bloqueio do app: a API do
+         sistema é quem valida — nenhum dado biométrico passa pelo Mango. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Dados do app fora do backup na nuvem: o banco `mango.db` guarda o
          texto bruto de cada cupom (coluna `raw`), que pode conter CPF impresso
          na nota, e o app promete dados 100% locais. O backup oficial é o CSV

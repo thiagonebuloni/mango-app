@@ -6,6 +6,46 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/) — o `+N` do
 `pubspec.yaml` é o *build number* do Android e **precisa** aumentar a cada
 release publicada.
 
+## [1.2.0] - 2026-09-29
+
+### Adicionado
+
+- **Bloqueio do app com PIN** (menu → *Segurança*): PIN de 4 a 6 dígitos,
+  digitado em um teclado do próprio app e guardado no banco apenas como hash
+  **PBKDF2-HMAC-SHA256** com sal aleatório (100.000 iterações) — o PIN em claro
+  nunca é gravado, e a comparação do hash é feita em tempo constante. Com o
+  bloqueio ativo, o app pede o desbloqueio ao abrir e **sempre que volta do
+  segundo plano**; o conteúdo do app fica desmontado atrás da tela de bloqueio,
+  então nada aparece na prévia de "app recentes" do Android.
+- **Desbloqueio por biometria** (opcional, quando o aparelho tem digital/rosto
+  cadastrado): quem valida é o sistema do aparelho — nenhum dado biométrico
+  passa pelo app — e o PIN continua valendo como reserva. A oferta aparece logo
+  depois de criar o PIN e a preferência pode ser mudada a qualquer momento na
+  tela *Segurança*.
+- **Trava por tentativas erradas:** as primeiras 5 tentativas são livres; da
+  quinta errada em diante a tela de bloqueio espera 30 s e a espera **dobra a
+  cada erro novo** (1 min, 2 min… até 30 min). Durante a espera ficam sem toque
+  o teclado e o botão de biometria, e a contagem mora no banco: fechar ou
+  reiniciar o app não zera a espera — só um desbloqueio bem-sucedido.
+- Tela **Segurança**: criar, alterar ou desativar o bloqueio (a troca e a
+  desativação sempre exigem o PIN atual) e ligar/desligar a biometria.
+- Botão *Esqueci meu PIN* na tela de bloqueio, explicando que o app é local:
+  sem biometria, a saída é desinstalar e reimportar o CSV exportado.
+
+### Alterado
+
+- Banco de dados na **v7** (tabela `seguranca`, o bloqueio) e na **v8**
+  (`tentativas_falhas` e `bloqueado_ate`, a trava por tentativas), criadas na
+  migração — bancos existentes mantêm todos os lançamentos e o perfil.
+- Telas do Android passam a usar o tema `Theme.AppCompat.DayNight`, exigido
+  pelo diálogo de biometria do `local_auth`.
+
+### Segurança
+
+- O hash do PIN e a preferência de biometria **não** entram no CSV nem no
+  backup automático do sistema: restaurado em outro aparelho, o app abre sem
+  tranca. A configuração existe só no banco local.
+
 ## [1.1.0] - 2026-09-29
 
 ### Adicionado

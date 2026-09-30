@@ -15,6 +15,7 @@ import '../screens/capture_screen.dart';
 import '../screens/diagnostico_screen.dart';
 import '../screens/expense_form_screen.dart';
 import '../screens/profile_setup_screen.dart';
+import '../screens/seguranca_screen.dart';
 import '../services/app_info.dart';
 import '../state/providers.dart';
 
@@ -339,6 +340,19 @@ void showMenuApp(
                     builder: (_) => ProfileSetupScreen(
                       existing: ref.read(profileProvider).value,
                     ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.lock_outline),
+              title: const Text('Segurança'),
+              subtitle: const Text('Bloqueio do app com PIN e biometria'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SegurancaScreen(),
                   ),
                 );
               },

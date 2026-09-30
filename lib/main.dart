@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'db/db.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/landing_screen.dart';
+import 'screens/lock_screen.dart';
 import 'services/crash_log.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
@@ -94,7 +95,7 @@ class MangoApp extends ConsumerWidget {
         temaClaro: temaClaroDoPerfil(perfil),
         corAcento: corAcentoDoPerfil(perfil),
       ),
-      home: const ProfileGate(),
+      home: const LockGate(child: ProfileGate()),
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],
       localizationsDelegates: const [
@@ -129,6 +130,69 @@ class ProfileGate extends ConsumerWidget {
   }
 }
 
+/// Portão de segurança do app.
+///
+/// Com um PIN configurado, o [child] fica **desmontado** atrás da
+/// [LockScreen]: o conteúdo real nem é construído, então nada dele aparece
+/// no "app recentes" do Android. Sem PIN, é um pass-through.
+///
+/// A tranca volta em toda ida ao segundo plano (`paused` → `resumed`); a
+/// janela de alguns segundos do [BloqueioNotifier] cobre o retorno que a
+/// própria chamada de biometria provoca em algumas OEMs.
+class LockGate extends ConsumerStatefulWidget {
+  const LockGate({super.key, required this.child});
+
+  /// O app propriamente dito (em geral o [ProfileGate]).
+  final Widget child;
+
+  @override
+  ConsumerState<LockGate> createState() => _LockGateState();
+}
+
+class _LockGateState extends ConsumerState<LockGate>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    // Ler (e não escutar) o provedor: aqui só interessa o valor de agora —
+    // o `resumed` pode chegar antes de a configuração terminar de carregar.
+    final config = ref.read(segurancaProvider).value;
+    ref.read(bloqueioProvider.notifier).reaoVoltar(config);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ref.watch(segurancaProvider).when(
+          loading: () => const _CarregandoScreen(),
+          error: (e, _) => Scaffold(
+            body: Center(
+              child: Text('Erro ao carregar a segurança do app: $e'),
+            ),
+          ),
+          data: (config) {
+            if (config == null || !ref.watch(bloqueioProvider)) {
+              return widget.child;
+            }
+            return LockScreen(config: config);
+          },
+        );
+  }
+}
+
+/// Tela de espera enquanto o banco abre (evita um frame em branco com a cor
+/// errada antes de saber se há perfil salvo).
 class _CarregandoScreen extends StatelessWidget {
   const _CarregandoScreen();
 

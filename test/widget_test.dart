@@ -22,12 +22,15 @@ import 'package:mango/screens/home_screen.dart';
 import 'package:mango/screens/landing_screen.dart';
 import 'package:mango/screens/profile_setup_screen.dart';
 import 'package:mango/screens/reports_screen.dart';
+import 'package:mango/screens/seguranca_screen.dart';
 import 'package:mango/services/crash_log.dart';
 import 'package:mango/state/providers.dart';
 import 'package:mango/theme/app_theme.dart';
 import 'package:mango/widgets/avatar.dart';
 import 'package:mango/widgets/common.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+import 'fakes_seguranca.dart';
 
 /// Perfil já cadastrado (casos de "demais aberturas" do app).
 const _perfilTeste = UserProfile(
@@ -1075,6 +1078,8 @@ void main() async {
             expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
             expensesForReportsProvider
                 .overrideWith(() => _FakeReportsNotifier()),
+            // Sem PIN configurado: o LockGate é um pass-through.
+            segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
           ],
           child: const MangoApp(),
         ),
@@ -1128,6 +1133,7 @@ void main() async {
           overrides: [
             perfilInicialProvider.overrideWithValue(_perfilTeste),
             profileProvider.overrideWith(() => _LentoProfileNotifier()),
+            segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
           ],
           child: const MangoApp(),
         ),
@@ -1213,6 +1219,7 @@ void main() async {
             expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
             expensesForReportsProvider
                 .overrideWith(() => _FakeReportsNotifier()),
+            segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
           ],
           child: const MangoApp(),
         ),
@@ -1334,6 +1341,44 @@ void main() async {
         (bgClaro.decoration! as BoxDecoration).color,
         isNot(Colors.transparent),
       );
+    });
+  });
+
+  group('Segurança (bloqueio do app)', () {
+    /// Abre a tela pelo caminho do usuário: Menu → Segurança.
+    Future<void> abrirPeloMenu(WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            profileProvider
+                .overrideWith(() => _FakeProfileNotifier(_perfilTeste)),
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+            // Sem PIN configurado e sem biometria no aparelho.
+            segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
+            autenticadorBiometricoProvider
+                .overrideWithValue(FakeBiometrico(temBiometria: false)),
+          ],
+          child: _makeApp(home: const ProfileGate()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+      // O sheet é rolável: "Segurança" pode nascer abaixo da dobra.
+      await tester.ensureVisible(find.text('Segurança'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Segurança'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('item no menu abre a tela de Segurança', (tester) async {
+      await abrirPeloMenu(tester);
+
+      expect(find.byType(SegurancaScreen), findsOneWidget);
+      expect(find.text('Criar PIN'), findsOneWidget);
     });
   });
 

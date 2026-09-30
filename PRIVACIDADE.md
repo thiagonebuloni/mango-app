@@ -15,10 +15,13 @@ para onde eles vão: **nenhum dado sai do seu aparelho**.
 | Fotos dos cupons | Área privada do app (documentos), apagadas quando o lançamento é excluído |
 | Perfil (nome, emoticon, foto do avatar, cores e tema) | Mesmo banco |
 | Registro de falhas do app (erro, pilha, hora) | Arquivo `falhas.jsonl` na área privada do app — listado em menu → *Diagnóstico* e fora do CSV |
+| Bloqueio do app (hash do PIN, sal, iterações, preferência de biometria e a trava por tentativas: quantas falhas e até quando dura a espera) | Mesmo banco, tabela `seguranca` — fora do CSV; o PIN em claro **nunca** é gravado |
 
-Não há servidor, conta de usuário, cadastro, login nem sincronização. O app não
-declara a permissão de **internet** no APK de release, ou seja, não tem como
-enviar dados para lugar nenhum.
+Não há servidor, conta de usuário, cadastro, login nem sincronização. O PIN
+opcional (§3) é apenas uma tranca local do app, não uma conta: não existe
+e-mail, senha de recuperação nem nada parecido. O app não declara a permissão
+de **internet** no APK de release, ou seja, não tem como enviar dados para
+lugar nenhum.
 
 ## 2. Dados que o app **não** coleta
 
@@ -39,6 +42,12 @@ enviar dados para lugar nenhum.
   nenhum serviço.
 - **Arquivos:** o app só lê o arquivo de backup CSV que você escolher e só
   escreve dentro da sua própria área privada.
+- **Biometria:** usada apenas se você ligar o desbloqueio por biometria em
+  menu → *Segurança* (as permissões `USE_BIOMETRIC`/`USE_FINGERPRINT` existem só
+  para mostrar o diálogo do sistema). A digital/rosto **nunca** sai do sistema do aparelho: o
+  app recebe apenas "deu certo" ou "não deu certo" — nenhum dado biométrico é
+  lido, guardado ou compartilhado pelo Mango. O PIN do app, quando existe, é
+  guardado no banco local como hash (PBKDF2 + sal aleatório), nunca em claro.
 
 ## 4. Backup
 
@@ -51,13 +60,16 @@ enviar dados para lugar nenhum.
   lançamentos, e vai para onde você escolher (arquivos, e-mail, mensageiro,
   nuvem). Guarde-o em local seguro: como ele está sob seu controle, a proteção
   dele é responsabilidade sua. A foto do avatar, a foto do cupom e o texto
-  bruto do OCR **não** entram no CSV.
+  bruto do OCR **não** entram no CSV. O **bloqueio do app** (PIN/biometria)
+  também não: restaurado em outro aparelho, o app volta sem tranca.
 
 ## 5. Exclusão dos dados
 
 Desinstalar o app apaga tudo o que está na área privada dele. Você também pode
 excluir lançamentos individualmente dentro do app (as fotos correspondentes são
-removidas junto). Não existe cópia em servidor para pedir exclusão.
+removidas junto) e desligar o bloqueio a qualquer momento em menu → *Segurança*
+(exige o PIN atual), o que apaga a linha da tabela `seguranca`. Não existe cópia
+em servidor para pedir exclusão.
 
 ## 6. Crianças
 

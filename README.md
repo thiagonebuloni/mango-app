@@ -34,6 +34,15 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 - **Dados 100% locais** (SQLite via sqflite). Sem servidor, sem backend, e o
   **backup automático do Android não leva esses dados para a conta Google** —
   veja [Backup, privacidade e onde ficam os dados](#backup-privacidade-e-onde-ficam-os-dados).
+- **Bloqueio do app (opcional):** em menu → *Segurança* você cria um **PIN** de
+  4 a 6 dígitos (guardado como hash PBKDF2-HMAC-SHA256 com sal aleatório, nunca
+  em claro) e pode ligar o **desbloqueio por biometria** do aparelho. Com o
+  bloqueio ativo, o app pede o PIN ao abrir e sempre que volta do segundo plano;
+  depois de 5 tentativas erradas a tela espera 30 s, e cada erro novo **dobra a
+  espera** (até 30 min) — a contagem fica no banco, então fechar ou reiniciar o
+  app não foge da trava. O conteúdo do app fica desmontado atrás da tela de
+  bloqueio — nada aparece na prévia de "app recentes"
+  (`lib/screens/lock_screen.dart`, `lib/services/seguranca.dart`).
 - **Perfil e tela inicial:** nome, avatar (emoticon ou foto com recorte) e
   cor de fundo escolhidos no primeiro acesso
   (`lib/screens/profile_setup_screen.dart`); a tela inicial
@@ -60,7 +69,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 
 ## Requisitos
 
-- Flutter SDK (estável, ≥ 3.47 — testado com 3.47.5 / Dart 3.12)
+- Flutter SDK (estável, ≥ 3.47 — testado com 3.47.5 / Dart 3.13)
 - Android SDK/Studio (para Android) ou Xcode (para iOS)
 - Um dispositivo/emulador Android ou iOS
 
@@ -69,7 +78,7 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
 ```bash
 flutter pub get
 flutter analyze   # deve terminar com "No issues found!"
-flutter test      # 150 testes (parser do cupom + parcelas + categorizador + log de falhas + UI)
+flutter test      # 210 testes (parser do cupom + parcelas + categorizador + log de falhas + bloqueio/PIN + UI)
 ```
 
 O CI (`.github/workflows/ci.yml`) roda exatamente esses dois comandos a cada
@@ -119,6 +128,11 @@ de pagamento (mês / 30 dias / ano / intervalo custom).
   toca em *Compartilhar* e escolhe o destino na folha do sistema. O registro
   **não** entra no CSV, é limitado a 200 KB (falhas antigas saem) e falhas
   repetidas em sequência viram uma linha só com `×N`.
+- **Bloqueio do app (PIN/biometria).** A tabela `seguranca` guarda só o hash do
+  PIN (PBKDF2 + sal aleatório) e a preferência de biometria, e **não entra no
+  CSV nem no backup do sistema**: restaurado em outro aparelho, o app abre sem
+  tranca. Quem protege os dados é a tela de bloqueio do próprio app — o banco
+  `mango.db` em si continua sem criptografia, contando com o sandbox do Android.
 - **Por que não criptografar o CSV?** O app não tem servidor nem recuperação de
   senha: uma senha esquecida significaria backup perdido para sempre, e um
   arquivo cifrado deixaria de abrir em planilha. A proteção em repouso fica para
@@ -404,25 +418,47 @@ espaço, use `flutter run --release` ou desinstale antes. Para o app não acabar
 no *Segundo espaço* do aparelho, veja
 [Instalando no aparelho](#instalando-no-aparelho-sem-cair-no-segundo-espaço).
 
+### "Esqueci o PIN do app"
+
+O Mango é local: não existe conta, e-mail nem servidor — não há como recuperar
+um PIN esquecido. Errar tem custo: depois de 5 tentativas a tela de bloqueio
+espera 30 s, e cada erro novo dobra a espera (até 30 min); durante a espera o
+teclado e a biometria ficam fora de alcance, e a contagem não se perde ao fechar
+o app. Caminhos possíveis:
+
+- **Com biometria ligada:** entre pela digital/rosto (o botão aparece na tela de
+  bloqueio) e troque o PIN em *menu → Segurança → Alterar PIN*.
+- **Sem biometria:** a saída é desinstalar o app, o que apaga o banco (incluindo
+  as fotos dos cupons). Se você tem um **CSV exportado**, instale de novo, crie o
+  perfil e use *menu → Importar em CSV* — ou *Restaurar backup* no primeiro
+  acesso — para trazer os lançamentos de volta.
+- O `mango.db` fica na área privada do app: sem um aparelho destravado (e root)
+  não há como editar a tabela `seguranca` por fora — que é exatamente a ideia.
+
+Por isso o CSV continua sendo o backup oficial: ele não é afetado pelo bloqueio.
+
 ## Estrutura
 
 ```
 lib/
-├── main.dart                  # app + ProfileGate (primeiro acesso × tela inicial)
-├── models/models.dart         # Expense, Category, PaymentMethod, ReceiptDraft, UserProfile
-├── db/db.dart                 # SQLite (sqflite) + perfil + agregações + períodos
-├── state/providers.dart       # Riverpod: gastos, perfil, sumários dia/semana/mês
+├── main.dart                  # app + LockGate (bloqueio) + ProfileGate (abertura)
+├── models/models.dart         # Expense, Category, PaymentMethod, ReceiptDraft, UserProfile, SegurancaConfig
+├── db/db.dart                 # SQLite (sqflite) + perfil + bloqueio + agregações/períodos
+├── state/providers.dart       # Riverpod: gastos, perfil, sumários, segurança e bloqueio
 ├── theme/app_theme.dart       # tema do app a partir da cor de fundo do perfil
 ├── services/
 │   ├── ocr_service.dart       # ML Kit Text Recognition (on-device)
 │   ├── receipt_parser.dart    # parser heurístico de cupom fiscal BR
 │   ├── receipt_photo.dart     # cópia durável da foto do cupom + limpeza
 │   ├── categorizer.dart       # regras por palavra-chave + memória
+│   ├── seguranca.dart         # PIN (PBKDF2-HMAC-SHA256) + biometria + trava por tentativas
 │   ├── crash_log.dart         # log local de falhas (falhas.jsonl) + fila
 │   └── ai_fallback.dart       # extensão opcional p/ IA (desligada por padrão)
 ├── screens/
 │   ├── root_nav.dart          # abas Gastos / Relatórios (deslize)
 │   ├── landing_screen.dart    # tela inicial: avatar + nome + Meus gastos/Menu
+│   ├── lock_screen.dart       # bloqueio: teclado do PIN + botão de biometria
+│   ├── seguranca_screen.dart  # menu → Segurança: criar/alterar/desativar o bloqueio
 │   ├── profile_setup_screen.dart  # cadastro/edição: nome, avatar e cor de fundo
 │   ├── home_screen.dart       # lista de gastos + resumo
 │   ├── capture_screen.dart    # foto do cupom + OCR
@@ -440,11 +476,17 @@ tool/                          # generate_icon.py + install_release.sh (instala 
 ## Permissões
 
 - **Android:** nenhuma permissão própria — câmera e galeria são usadas pelo
-  seletor do próprio sistema. As permissões `INTERNET` e `ACCESS_NETWORK_STATE`
+  seletor do próprio sistema. As permissões `USE_BIOMETRIC` e `USE_FINGERPRINT`
+  (esta última para Android 8 e anteriores) vêm do plugin `local_auth`, apenas
+  para o diálogo de biometria do sistema quando o bloqueio do app está ligado.
+  As permissões `INTERNET` e `ACCESS_NETWORK_STATE`
   que bibliotecas arrastam (telemetria do ML Kit) são **removidas** no
   manifesto mesclado (`android/app/src/main/AndroidManifest.xml`), então o APK
   de **release não tem permissão de rede**. No build de **debug** a `INTERNET`
   continua declarada em `android/app/src/debug/AndroidManifest.xml`, exigida
   pelo Flutter para hot reload/depuração.
-- **iOS:** `NSCameraUsageDescription` e `NSPhotoLibraryUsageDescription` já
-  configurados em `ios/Runner/Info.plist`.
+- **iOS:** `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription` e
+  `NSFaceIDUsageDescription` (exigido pelo `local_auth` para o Face ID do
+  bloqueio por biometria) já configurados em `ios/Runner/Info.plist`. O
+  bloqueio por biometria no iOS ainda **não** foi testado (veja as *issues* do
+  repositório).

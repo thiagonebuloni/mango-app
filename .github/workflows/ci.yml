@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Versão fixada na mesma do README (testado com 3.47.5 / Dart 3.12):
+      # Versão fixada na mesma do README (testado com 3.47.5 / Dart 3.13):
       # subir de versão é uma decisão consciente, não efeito colateral de um
       # `stable` que mudou durante a madrugada.
       - uses: subosito/flutter-action@v2

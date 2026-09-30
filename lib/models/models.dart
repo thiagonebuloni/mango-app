@@ -465,3 +465,87 @@ class UserProfile {
       'UserProfile(nome: $nome, avatar: $avatar, cor: $corFundo, '
       'temaClaro: $temaClaro, foto: $avatarImagePath)';
 }
+
+/// Configuração do bloqueio do app (PIN + biometria): uma única linha na
+/// tabela `seguranca`; nenhuma linha = bloqueio desativado.
+///
+/// O PIN **nunca** é guardado em claro: [pinHash] é o resultado do
+/// PBKDF2-HMAC-SHA256 com [pinSalt] e [pinIteracoes] iterações. Os dados
+/// biométricos ficam no sistema do aparelho — aqui só mora a preferência de
+/// usá-los, validada pela API do Android.
+class SegurancaConfig {
+  /// Hash hexadecimal do PIN.
+  final String pinHash;
+
+  /// Sal hexadecimal, aleatório a cada criação/troca de PIN.
+  final String pinSalt;
+
+  /// Iterações usadas neste hash: guardadas para poder subir o custo no
+  /// futuro sem invalidar PINs já gravados.
+  final int pinIteracoes;
+
+  /// Dígitos do PIN (4..6). A tela de bloqueio usa para saber quando
+  /// validar; não é segredo — os slots do teclado já mostram o tamanho.
+  final int pinTamanho;
+
+  /// `true` = oferecer desbloqueio por biometria quando o aparelho tem.
+  final bool biometria;
+
+  const SegurancaConfig({
+    required this.pinHash,
+    required this.pinSalt,
+    required this.pinIteracoes,
+    required this.pinTamanho,
+    this.biometria = false,
+  });
+
+  SegurancaConfig copyWith({bool? biometria}) => SegurancaConfig(
+        pinHash: pinHash,
+        pinSalt: pinSalt,
+        pinIteracoes: pinIteracoes,
+        pinTamanho: pinTamanho,
+        biometria: biometria ?? this.biometria,
+      );
+
+  // Sem o hash no toString: ele acaba em logs de debug e é o segredo.
+  @override
+  String toString() =>
+      'SegurancaConfig(tamanho: $pinTamanho, iteracoes: $pinIteracoes, '
+      'biometria: $biometria)';
+}
+
+/// Trava por tentativas erradas de PIN: quantas falhas seguidas e até quando
+/// novas tentativas são recusadas (`bloqueadoAte` nulo = liberado).
+///
+/// Fica gravada na mesma linha da tabela `seguranca` justamente para que
+/// fechar e reabrir o app **não** zere a contagem — do contrário bastaria
+/// matar o processo para tentar PINs sem limite. As regras de contagem e de
+/// espera ficam em `services/seguranca.dart` (`registrarFalhaDePin`), longe
+/// da tela, para poderem ser testadas sem widget nenhum.
+class TentativasBloqueio {
+  /// Falhas consecutivas desde o último desbloqueio (ou troca de PIN).
+  final int falhas;
+
+  /// Instante até o qual o teclado fica travado; `null` = sem espera.
+  final DateTime? bloqueadoAte;
+
+  const TentativasBloqueio({this.falhas = 0, this.bloqueadoAte});
+
+  /// `true` quando [agora] ainda está dentro da espera.
+  bool travadoEm(DateTime agora) {
+    final ate = bloqueadoAte;
+    return ate != null && ate.isAfter(agora);
+  }
+
+  /// Quanto falta da espera em [agora]; `Duration.zero` = liberado.
+  Duration restanteEm(DateTime agora) {
+    final ate = bloqueadoAte;
+    if (ate == null) return Duration.zero;
+    final falta = ate.difference(agora);
+    return falta.isNegative ? Duration.zero : falta;
+  }
+
+  @override
+  String toString() => 'TentativasBloqueio(falhas: $falhas, '
+      'bloqueadoAte: $bloqueadoAte)';
+}

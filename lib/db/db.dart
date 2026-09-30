@@ -55,14 +55,33 @@ class DBHelper {
     )
   ''';
 
+  /// Bloqueio do app: PIN (só o hash PBKDF2) + preferência de biometria, mais
+  /// a trava por tentativas erradas (v8). Linha única, como o perfil; não
+  /// entra em exportação nenhuma.
+  static const _segurancaTable = '''
+    CREATE TABLE seguranca (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      pin_hash TEXT NOT NULL,
+      pin_salt TEXT NOT NULL,
+      pin_iter INTEGER NOT NULL,
+      pin_len INTEGER NOT NULL,
+      biometria INTEGER NOT NULL DEFAULT 0,
+      tentativas_falhas INTEGER NOT NULL DEFAULT 0,
+      bloqueado_ate INTEGER
+    )
+  ''';
+
   /// v1 = gastos + memória de categorias; v2 = perfil do usuário;
   /// v3 = coluna `tipo` (despesa/receita) em expenses;
   /// v4 = coluna `tema_claro` (tema claro/escuro) em profile;
   /// v5 = foto do avatar (`avatar_img`) + posição/zoom do recorte
   /// (`avatar_ax`, `avatar_ay`, `avatar_zoom`) em profile;
   /// v6 = padrão do tema passa a escuro em bancos novos
-  /// (`tema_claro DEFAULT 0`).
-  static const _dbVersion = 6;
+  /// (`tema_claro DEFAULT 0`);
+  /// v7 = tabela `seguranca` (bloqueio com PIN + biometria);
+  /// v8 = trava por tentativas erradas (`tentativas_falhas` e `bloqueado_ate`)
+  /// em `seguranca`.
+  static const _dbVersion = 8;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -74,6 +93,7 @@ class DBHelper {
         await db.execute(_expensesTable);
         await db.execute(_merchantsTable);
         await db.execute(_profileTable);
+        await db.execute(_segurancaTable);
       },
       onUpgrade: (db, oldVersion, _) async {
         if (oldVersion < 2) await db.execute(_profileTable);
@@ -110,6 +130,26 @@ class DBHelper {
           if (!nomes.contains('avatar_zoom')) {
             await db.execute(
                 'ALTER TABLE profile ADD COLUMN avatar_zoom REAL NOT NULL DEFAULT 1');
+          }
+        }
+        if (oldVersion < 7) {
+          // Bloqueio com PIN: a tabela nasce vazia (bloqueio desativado) —
+          // quem já usava o app mantém os dados e ativa pelo menu.
+          await db.execute(_segurancaTable);
+        }
+        if (oldVersion < 8) {
+          // Trava por tentativas: bancos que já tinham o bloqueio (v7)
+          // começam liberados (`tentativas_falhas` 0 e sem espera). Um banco
+          // anterior à v7 acabou de criar a tabela já com as colunas.
+          final cols = await db.rawQuery('PRAGMA table_info(seguranca)');
+          final nomes = cols.map((c) => c['name'] as String?).toSet();
+          if (!nomes.contains('tentativas_falhas')) {
+            await db.execute('ALTER TABLE seguranca ADD COLUMN '
+                'tentativas_falhas INTEGER NOT NULL DEFAULT 0');
+          }
+          if (!nomes.contains('bloqueado_ate')) {
+            await db.execute(
+                'ALTER TABLE seguranca ADD COLUMN bloqueado_ate INTEGER');
           }
         }
       },
@@ -232,6 +272,80 @@ class DBHelper {
       'profile',
       profile.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // ---------------- bloqueio (PIN + biometria) ----------------
+
+  /// Configuração do bloqueio, ou `null` quando desativado.
+  Future<SegurancaConfig?> loadSeguranca() async {
+    final rows = await db.query('seguranca', where: 'id = ?', whereArgs: [1]);
+    if (rows.isEmpty) return null;
+    final m = rows.first;
+    return SegurancaConfig(
+      pinHash: m['pin_hash'] as String,
+      pinSalt: m['pin_salt'] as String,
+      pinIteracoes: m['pin_iter'] as int,
+      pinTamanho: m['pin_len'] as int,
+      biometria: (m['biometria'] as int) != 0,
+    );
+  }
+
+  /// Grava (ou atualiza) a configuração do bloqueio — linha única.
+  ///
+  /// O `replace` recria a linha, então qualquer mudança de configuração
+  /// (criar, trocar ou desativar o PIN) também zera a trava por tentativas:
+  /// quem mexeu na configuração está dentro do app e não tem o que esperar.
+  Future<void> saveSeguranca(SegurancaConfig config) async {
+    await db.insert(
+      'seguranca',
+      {
+        'id': 1,
+        'pin_hash': config.pinHash,
+        'pin_salt': config.pinSalt,
+        'pin_iter': config.pinIteracoes,
+        'pin_len': config.pinTamanho,
+        'biometria': config.biometria ? 1 : 0,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Remove a configuração: o app volta a abrir sem bloqueio.
+  Future<void> apagarSeguranca() async {
+    await db.delete('seguranca', where: 'id = ?', whereArgs: [1]);
+  }
+
+  /// Trava por tentativas erradas: contagem e espera em vigor. Sem bloqueio
+  /// ativo (nem linha na tabela) devolve o estado liberado.
+  Future<TentativasBloqueio> loadTentativas() async {
+    final rows = await db.query(
+      'seguranca',
+      columns: ['tentativas_falhas', 'bloqueado_ate'],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return const TentativasBloqueio();
+    final m = rows.first;
+    final ate = m['bloqueado_ate'] as int?;
+    return TentativasBloqueio(
+      falhas: m['tentativas_falhas'] as int,
+      bloqueadoAte:
+          ate == null ? null : DateTime.fromMillisecondsSinceEpoch(ate),
+    );
+  }
+
+  /// Grava a contagem/espera da trava. É só `update`: sem linha na tabela
+  /// (bloqueio desativado) não há o que contar.
+  Future<void> saveTentativas(TentativasBloqueio tentativas) async {
+    await db.update(
+      'seguranca',
+      {
+        'tentativas_falhas': tentativas.falhas,
+        'bloqueado_ate': tentativas.bloqueadoAte?.millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
     );
   }
 

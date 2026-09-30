@@ -5,6 +5,7 @@ import '../db/db.dart';
 import '../models/models.dart';
 import '../services/receipt_parser.dart';
 import '../services/receipt_photo.dart';
+import '../services/seguranca.dart';
 
 /// Estado reativo dos gastos: carrega do SQLite e re-carrega após mutações.
 class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
@@ -361,4 +362,145 @@ class PeriodRange {
   DateTime get endExclusive => end.add(const Duration(days: 1));
 
   bool contains(DateTime dt) => !dt.isBefore(start) && dt.isBefore(endExclusive);
+}
+
+// ---------------- bloqueio do app (PIN + biometria) ----------------
+
+/// Configuração do bloqueio; `null` = desativado (app abre direto).
+final segurancaProvider =
+    AsyncNotifierProvider<SegurancaNotifier, SegurancaConfig?>(
+        SegurancaNotifier.new);
+
+class SegurancaNotifier extends AsyncNotifier<SegurancaConfig?> {
+  @override
+  Future<SegurancaConfig?> build() => DBHelper.instance.loadSeguranca();
+
+  Future<void> _gravar(SegurancaConfig config) async {
+    await DBHelper.instance.saveSeguranca(config);
+    state = AsyncData(config);
+    // O `saveSeguranca` zera a trava por tentativas: recarrega a memória para
+    // ela não ficar mostrando uma espera que o banco já não tem.
+    ref.invalidate(tentativasProvider);
+  }
+
+  /// Ativa o bloqueio criando o PIN (e opcionalmente a biometria).
+  Future<void> ativar({required String pin, required bool biometria}) async {
+    await _gravar(await criarConfigPin(pin, biometria: biometria));
+  }
+
+  /// Troca o PIN depois de conferir o atual.
+  Future<void> alterarPin({
+    required String atual,
+    required String novo,
+  }) async {
+    final config = state.value;
+    if (config == null) {
+      throw StateError('O bloqueio não está ativo.');
+    }
+    if (!await verificarPin(atual, config)) {
+      throw const FormatException('PIN atual incorreto.');
+    }
+    await _gravar(await rehashearPin(config, novo));
+  }
+
+  /// Liga/desliga a preferência de biometria (o PIN continua obrigatório).
+  Future<void> setBiometria(bool valor) async {
+    final config = state.value;
+    if (config == null) {
+      throw StateError('O bloqueio não está ativo.');
+    }
+    await _gravar(config.copyWith(biometria: valor));
+  }
+
+  /// Desativa o bloqueio por completo, conferindo o PIN atual.
+  Future<void> desativar({required String atual}) async {
+    final config = state.value;
+    if (config == null) return;
+    if (!await verificarPin(atual, config)) {
+      throw const FormatException('PIN incorreto.');
+    }
+    await DBHelper.instance.apagarSeguranca();
+    state = const AsyncData(null);
+    ref.invalidate(tentativasProvider);
+  }
+}
+
+/// A tranca em si: `true` = travado. Nasce **travada** — toda abertura do
+/// app passa por aqui quando o bloqueio está ativo.
+final bloqueioProvider = NotifierProvider<BloqueioNotifier, bool>(
+  BloqueioNotifier.new,
+);
+
+class BloqueioNotifier extends Notifier<bool> {
+  /// [janelaCorrida] existe para os testes conseguirem zerá-la e conferir a
+  /// re-tranca sem esperar três segundos de verdade.
+  BloqueioNotifier({this.janelaCorrida = const Duration(seconds: 3)});
+
+  /// Tempo em que uma volta ao primeiro plano logo **depois** de destravar é
+  /// ignorada: algumas OEMs entregam o `resumed` por conta do sucesso da
+  /// biometria, e re-trancar aí travaria na cara de quem acabou de destravar.
+  final Duration janelaCorrida;
+
+  /// Instante da última destrava; `null` = ainda não destravou nesta sessão.
+  DateTime? _destravouEm;
+
+  @override
+  bool build() => true;
+
+  void destravar() {
+    _destravouEm = DateTime.now();
+    state = false;
+  }
+
+  /// Re-tranca quando o app volta para primeiro plano. Ignora quando o
+  /// bloqueio está desligado ([config] nulo) e dentro da janela de corrida
+  /// pós-desbloqueio.
+  void reaoVoltar(SegurancaConfig? config) {
+    if (config == null) return;
+    final ultimo = _destravouEm;
+    if (ultimo != null && DateTime.now().difference(ultimo) < janelaCorrida) {
+      return;
+    }
+    state = true;
+  }
+}
+
+/// Autenticador biométrico usado pelas telas (os testes injetam um falso).
+final autenticadorBiometricoProvider = Provider<AutenticadorBiometrico>(
+  (ref) => LocalAuthBiometrico(),
+);
+
+/// Relógio do app: usado pela trava por tentativas e pela contagem regressiva
+/// da tela de bloqueio. Vive em um provedor para os testes conseguirem
+/// avançar o tempo sem dormir de verdade.
+final relogioProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+// ---------------- trava por tentativas erradas ----------------
+
+/// Contagem de PINs errados e a espera em vigor (persistidas no banco, para
+/// fechar e reabrir o app não zerar a conta).
+final tentativasProvider =
+    AsyncNotifierProvider<TentativasNotifier, TentativasBloqueio>(
+        TentativasNotifier.new);
+
+class TentativasNotifier extends AsyncNotifier<TentativasBloqueio> {
+  @override
+  Future<TentativasBloqueio> build() => DBHelper.instance.loadTentativas();
+
+  /// Conta um PIN errado e liga/estende a espera. Devolve o estado novo — a
+  /// tela usa `restanteEm` para desenhar a contagem regressiva.
+  Future<TentativasBloqueio> registrarFalha() async {
+    final atual = state.value ?? const TentativasBloqueio();
+    final novo = registrarFalhaDePin(atual, ref.read(relogioProvider)());
+    await DBHelper.instance.saveTentativas(novo);
+    state = AsyncData(novo);
+    return novo;
+  }
+
+  /// Zera a contagem: desbloqueio bem-sucedido. Grava sempre, porque o estado
+  /// em memória pode nem ter carregado ainda quando o usuário acerta o PIN.
+  Future<void> limpar() async {
+    await DBHelper.instance.saveTentativas(const TentativasBloqueio());
+    state = const AsyncData(TentativasBloqueio());
+  }
 }

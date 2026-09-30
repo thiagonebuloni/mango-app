@@ -22,6 +22,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>O Face ID é usado para desbloquear o app quando o desbloqueio por biometria está ativado.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>A câmera é usada para fotografar cupons fiscais e registrar gastos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
