@@ -47,6 +47,19 @@ preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-devic
   cor de fundo escolhidos no primeiro acesso
   (`lib/screens/profile_setup_screen.dart`); a tela inicial
   (`lib/screens/landing_screen.dart`) mostra avatar + nome e os botões
+- **Idioma do aparelho:** o app abre em **pt-BR** ou **en-US** conforme o
+  idioma do sistema — inglês (qualquer `en_*`) abre em en-US, todo o resto
+  cai em pt-BR. Não há troca manual dentro do app. Todas as frases estão em
+  `lib/l10n/` (contrato + uma tradução por idioma) e as telas leem o texto de
+  `context.strings`; moeda, datas, categorias e formas de pagamento também
+  seguem o idioma (`lib/l10n/l10n_format.dart`). Como as duas traduções
+  implementam a mesma classe abstrata, uma frase nova que fique só em
+  português não compila.
+- **Tela de entrada (splash):** ao abrir, o app mostra o gradiente laranja →
+  amarelo da manga com 🥭 + nome (`lib/screens/splash_screen.dart`)
+  enquanto o perfil e a segurança carregam — o splash nativo (Android
+  `launch_background.xml` + iOS `LaunchScreen.storyboard`) usa as mesmas
+  cores, então a abertura é contínua do ícone até o conteúdo.
 - **Foto do cupom:** limite de 8 MB — imagens maiores (em geral vindas da
   galeria) são recusadas **antes** de decodificar/rodar o OCR, pois decodificar
   aloca muito mais memória e pode travar o app em aparelhos simples. A foto
@@ -446,6 +459,12 @@ lib/
 ├── db/db.dart                 # SQLite (sqflite) + perfil + bloqueio + agregações/períodos
 ├── state/providers.dart       # Riverpod: gastos, perfil, sumários, segurança e bloqueio
 ├── theme/app_theme.dart       # tema do app a partir da cor de fundo do perfil
+├── l10n/
+│   ├── app_strings.dart        # contrato de frases (uma por idioma do app)
+│   ├── app_strings_pt.dart    # pt-BR
+│   ├── app_strings_en.dart    # en-US
+│   ├── app_locale.dart        # idioma do sistema → locale do app; `context.strings`
+│   └── l10n_format.dart       # moeda e datas pelo locale (BRL/USD)
 ├── services/
 │   ├── ocr_service.dart       # ML Kit Text Recognition (on-device)
 │   ├── receipt_parser.dart    # parser heurístico de cupom fiscal BR
@@ -456,6 +475,7 @@ lib/
 │   └── ai_fallback.dart       # extensão opcional p/ IA (desligada por padrão)
 ├── screens/
 │   ├── root_nav.dart          # abas Gastos / Relatórios (deslize)
+│   ├── splash_screen.dart     # tela de entrada: gradiente manga + nome
 │   ├── landing_screen.dart    # tela inicial: avatar + nome + Meus gastos/Menu
 │   ├── lock_screen.dart       # bloqueio: teclado do PIN + botão de biometria
 │   ├── seguranca_screen.dart  # menu → Segurança: criar/alterar/desativar o bloqueio
