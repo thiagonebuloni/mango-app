@@ -12,6 +12,7 @@ import 'db/db.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/lock_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/crash_log.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
@@ -113,13 +114,17 @@ class MangoApp extends ConsumerWidget {
 ///   um arquivo de backup para restaurar ou se quer criar um perfil novo;
 /// - **demais aberturas** → tela inicial com avatar, nome e os botões
 ///   "Meus gastos" e "Menu".
+///
+/// Enquanto o perfil carrega, mostra o [MangoSplash] (tela de entrada com a
+/// identidade do app) em vez de um spinner solto — a mesma arte do splash
+/// nativo, então a abertura é contínua do ícone até o conteúdo.
 class ProfileGate extends ConsumerWidget {
   const ProfileGate({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ref.watch(profileProvider).when(
-          loading: () => const _CarregandoScreen(),
+          loading: () => const MangoSplash(),
           error: (e, _) => Scaffold(
             body: Center(child: Text('Erro ao carregar o perfil: $e')),
           ),
@@ -175,7 +180,7 @@ class _LockGateState extends ConsumerState<LockGate>
   @override
   Widget build(BuildContext context) {
     return ref.watch(segurancaProvider).when(
-          loading: () => const _CarregandoScreen(),
+          loading: () => const MangoSplash(),
           error: (e, _) => Scaffold(
             body: Center(
               child: Text('Erro ao carregar a segurança do app: $e'),
@@ -191,16 +196,6 @@ class _LockGateState extends ConsumerState<LockGate>
   }
 }
 
-/// Tela de espera enquanto o banco abre (evita um frame em branco com a cor
-/// errada antes de saber se há perfil salvo).
-class _CarregandoScreen extends StatelessWidget {
-  const _CarregandoScreen();
-
-  @override
-  Widget build(BuildContext context) => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-}
 
 /// Parte da tela que falhou, em release.
 ///

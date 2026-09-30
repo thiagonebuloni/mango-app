@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Splash nativo do Mango: gradiente laranja -> amarelo (cores da manga,
+     iguais às do ícone em tool/generate_icon.py e às de
+     lib/screens/splash_screen.dart). Exibido pelo Android antes do primeiro
+     frame do Flutter; o MangoSplash do Flutter repete o mesmo gradiente com
+     a manga + nome, então a transição é contínua. Sem bitmap: só o fundo. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#FFFF9E1F"
+                android:endColor="#FFFFD140" />
+        </shape>
+    </item>
 </layer-list>

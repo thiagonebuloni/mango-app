@@ -4,9 +4,11 @@
     <!-- Parent AppCompat: exigido pelo local_auth (diálogo da biometria) para
          não quebrar em Android 8 e anteriores; o DayNight acompanha o sistema. -->
     <style name="LaunchTheme" parent="Theme.AppCompat.DayNight">
-        <!-- Show a splash screen on the activity. Automatically removed when
-             the Flutter engine draws its first frame -->
+        <!-- Splash nativo (antes do 1º frame do Flutter): fundo manga. A
+             partir da API 31 o sistema aplica a SplashScreen do Android 12+
+             por cima; windowSplashScreenBackground garante a mesma cor. -->
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">#FFFF9E1F</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
