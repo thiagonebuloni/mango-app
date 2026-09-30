@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/app_locale.dart';
 import '../services/crash_log.dart';
 
 /// Tela **Diagnóstico**: as falhas registradas no próprio aparelho.
@@ -61,13 +62,14 @@ class _DiagnosticoScreenState extends State<DiagnosticoScreen> {
     // Captura o messenger antes do `await`: depois de abrir a folha do
     // sistema o contexto pode já não estar mais montado.
     final messenger = ScaffoldMessenger.of(context);
+    final s = context.strings;
     try {
       await SharePlus.instance.share(
-        ShareParams(text: _textoCompleto, title: 'Diagnóstico Mango'),
+        ShareParams(text: _textoCompleto, title: '${s.diagnostico} Mango'),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Não foi possível compartilhar: $e')),
+        SnackBar(content: Text(s.naoCompartilhar('$e'))),
       );
     }
   }
@@ -75,12 +77,13 @@ class _DiagnosticoScreenState extends State<DiagnosticoScreen> {
   Future<void> _copiar() async {
     if (_eventos == null || _eventos!.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
+    final s = context.strings;
     try {
       await Clipboard.setData(ClipboardData(text: _textoCompleto));
-      messenger.showSnackBar(const SnackBar(content: Text('Registro copiado.')));
+      messenger.showSnackBar(SnackBar(content: Text(s.registroCopiado)));
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Não foi possível copiar: $e')),
+        SnackBar(content: Text(s.naoCopiar('$e'))),
       );
     }
   }
@@ -88,22 +91,20 @@ class _DiagnosticoScreenState extends State<DiagnosticoScreen> {
   Future<void> _limpar() async {
     if (_eventos == null || _eventos!.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
+    final s = context.strings;
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Apagar o registro?'),
-        content: const Text(
-          'As falhas listadas serão apagadas deste aparelho. Se você ainda '
-          'precisar delas para um suporte, compartilhe antes.',
-        ),
+        title: Text(s.apagarRegistro),
+        content: Text(s.apagarRegistroMsg),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Não'),
+            child: Text(s.nao),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Apagar'),
+            child: Text(s.apagar),
           ),
         ],
       ),
@@ -113,25 +114,24 @@ class _DiagnosticoScreenState extends State<DiagnosticoScreen> {
     if (!mounted) return;
     setState(() => _eventos = const <EventoFalha>[]);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Registro de falhas apagado.')),
+      SnackBar(content: Text(s.registroApagado)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final eventos = _eventos;
+    final s = context.strings;
     return Scaffold(
-      appBar: AppBar(title: const Text('Diagnóstico')),
+      appBar: AppBar(title: Text(s.diagnostico)),
       body: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text(
-              'Falhas acontecidas neste aparelho. Nada é enviado '
-              'automaticamente: só sai daqui se você tocar em Compartilhar e '
-              'escolher o destino. O backup em CSV não inclui este registro.',
+              s.diagnosticoDetalhe,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
           Expanded(child: _corpo(eventos)),
@@ -148,17 +148,17 @@ class _DiagnosticoScreenState extends State<DiagnosticoScreen> {
               onPressed:
                   eventos != null && eventos.isNotEmpty ? _compartilhar : null,
               icon: const Icon(Icons.share),
-              label: const Text('Compartilhar'),
+              label: Text(s.compartilhar),
             ),
             OutlinedButton.icon(
               onPressed: eventos != null && eventos.isNotEmpty ? _copiar : null,
               icon: const Icon(Icons.copy),
-              label: const Text('Copiar'),
+              label: Text(s.copiar),
             ),
             TextButton.icon(
               onPressed: eventos != null && eventos.isNotEmpty ? _limpar : null,
               icon: const Icon(Icons.delete_outline),
-              label: const Text('Limpar'),
+              label: Text(s.limpar),
             ),
           ],
         ),
@@ -167,37 +167,38 @@ class _DiagnosticoScreenState extends State<DiagnosticoScreen> {
   }
 
   Widget _corpo(List<EventoFalha>? eventos) {
+    final s = context.strings;
     if (eventos == null) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_falhaLeitura) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'Não foi possível ler o registro de falhas neste aparelho.',
+            s.falhaLeitura,
             textAlign: TextAlign.center,
           ),
         ),
       );
     }
     if (eventos.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle_outline, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
+              const Icon(Icons.check_circle_outline,
+                  size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
               Text(
-                'Nenhuma falha registrada',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                s.nenhumaFalha,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
-                'Quando algo quebrar por aqui, o detalhe aparece nesta tela — '
-                'pronto para você compartilhar, se quiser.',
+                s.nenhumaFalhaDetalhe,
                 textAlign: TextAlign.center,
               ),
             ],

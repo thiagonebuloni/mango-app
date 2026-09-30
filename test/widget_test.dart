@@ -14,12 +14,14 @@ import 'package:path/path.dart' as p;
 
 import 'package:mango/db/db.dart';
 import 'package:mango/main.dart';
+import 'package:mango/l10n/app_locale.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/screens/capture_screen.dart';
 import 'package:mango/screens/diagnostico_screen.dart';
 import 'package:mango/screens/expense_form_screen.dart';
 import 'package:mango/screens/home_screen.dart';
 import 'package:mango/screens/landing_screen.dart';
+import 'package:mango/screens/splash_screen.dart';
 import 'package:mango/screens/profile_setup_screen.dart';
 import 'package:mango/screens/reports_screen.dart';
 import 'package:mango/screens/seguranca_screen.dart';
@@ -1081,7 +1083,7 @@ void main() async {
             // Sem PIN configurado: o LockGate é um pass-through.
             segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
           ],
-          child: const MangoApp(),
+          child: const MangoApp(localeTest: Locale('pt', 'BR')),
         ),
       );
       await tester.pumpAndSettle();
@@ -1135,11 +1137,15 @@ void main() async {
             profileProvider.overrideWith(() => _LentoProfileNotifier()),
             segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
           ],
-          child: const MangoApp(),
+          child: const MangoApp(localeTest: Locale('pt', 'BR')),
         ),
       );
       await tester.pump(); // 1º frame: profileProvider ainda carregando
 
+      // Splash de entrada (identidade do app) com o tema já na cor do perfil.
+      expect(find.byType(MangoSplash), findsOneWidget);
+      expect(find.text('🥭'), findsOneWidget);
+      expect(find.text('Mango'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(
         tester
@@ -1221,7 +1227,7 @@ void main() async {
                 .overrideWith(() => _FakeReportsNotifier()),
             segurancaProvider.overrideWith(() => FakeSegurancaNotifier()),
           ],
-          child: const MangoApp(),
+          child: const MangoApp(localeTest: Locale('pt', 'BR')),
         ),
       );
       await tester.pumpAndSettle();
@@ -1532,10 +1538,14 @@ void main() async {
 const String _pngUmPixel =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=';
 
-Widget _makeApp({Widget? home}) => MaterialApp(
+/// App de teste com o mesmo idioma por omissão do app (pt-BR).
+///
+/// [locale] permite exercitar o outro idioma sem duplicar o harness.
+Widget _makeApp({Widget? home, Locale locale = const Locale('pt', 'BR')}) =>
+    MaterialApp(
       home: home ?? const HomeScreen(),
-      locale: const Locale('pt', 'BR'),
-      supportedLocales: const [Locale('pt', 'BR')],
+      locale: locale,
+      supportedLocales: supportedAppLocales,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

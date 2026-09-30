@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../db/db.dart';
+import '../l10n/app_locale.dart';
+import '../l10n/l10n_format.dart';
 import '../models/models.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
@@ -78,11 +80,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Relatórios'),
+        title: Text(context.strings.relatorios),
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
-            tooltip: 'Menu',
+            tooltip: context.strings.menu,
             onPressed: () => showMenuApp(
               context,
               ref,
@@ -98,7 +100,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erro ao carregar dados: $e')),
+        error: (e, _) =>
+            Center(child: Text(context.strings.erroCarregar('$e'))),
         data: (expenses) {
           final pr = periodRange;
           final inPeriodAll =
@@ -166,22 +169,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       hoverColor: (destaque ??
                               Theme.of(context).colorScheme.primary)
                           .withValues(alpha: 0.15),
-                      children: const [
+                      children: [
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('Mês'),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(context.strings.periodoMes),
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('30 dias'),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(context.strings.periodo30),
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('Ano'),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(context.strings.periodoAno),
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('Custom'),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(context.strings.periodoCustom),
                         ),
                       ],
                     ),
@@ -190,8 +197,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 const SizedBox(height: 8),
                 Center(
                   child: Text(
-                    '${DateFormat('dd/MM/yyyy', 'pt_BR').format(pr.start)} — '
-                    '${DateFormat('dd/MM/yyyy', 'pt_BR').format(pr.end)}',
+                    '${formatDate(pr.start, (p) => p.dayMonthYear)} — '
+                    '${formatDate(pr.end, (p) => p.dayMonthYear)}',
                     style: const TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                 ),
@@ -203,9 +210,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (byDay.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text('Sem gastos no periodo.')),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text(context.strings.semGastosPeriodo)),
                   )
                 else
                   _DaySummaryCard(
@@ -215,7 +222,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ),
                 const SizedBox(height: 16),
                 if (byCategory.isEmpty && byPayment.isEmpty)
-                  const Center(child: Text('Sem dados para visualização.'))
+                  Center(child: Text(context.strings.semDados))
                 else ...[
                   if (byCategory.isNotEmpty)
                     _CategoryCard(
@@ -264,7 +271,10 @@ class _BalanceBarCard extends StatelessWidget {
     final saldo = totalReceitas - totalDespesas;
     final saldoNegativo = saldo < 0;
     final saldoColor = saldoNegativo ? despesaColor : receitaColor;
-    final saldoTexto = '${saldoNegativo ? '-' : '+'} ${formatBRL(saldo.abs())}';
+    final s = context.strings;
+    final loc = Localizations.localeOf(context);
+    String moeda(int centavos) => formatMoney(centavos, loc);
+    final saldoTexto = '${saldoNegativo ? '-' : '+'} ${moeda(saldo.abs())}';
     final maxValor =
         totalDespesas > totalReceitas ? totalDespesas : totalReceitas;
     // O fl_chart não renderiza barras com toY == maxY == 0: garante uma
@@ -280,7 +290,7 @@ class _BalanceBarCard extends StatelessWidget {
     }
 
     Widget bottomTitle(double value, TitleMeta meta) {
-      final label = value.toInt() == 0 ? 'Despesas' : 'Receitas';
+      final label = value.toInt() == 0 ? s.despesas : s.receitas;
       return SideTitleWidget(
         meta: meta,
         child: Text(label, style: const TextStyle(fontSize: 13)),
@@ -294,11 +304,11 @@ class _BalanceBarCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Despesas x Receitas',
+            Text(s.despesasXReceitas,
                 style: TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 16, color: onCard)),
             const SizedBox(height: 4),
-            Text('Total do período',
+            Text(s.totalPeriodo,
                 style: TextStyle(
                     fontSize: 13,
                     color: onCard?.withValues(alpha: 0.7) ?? Colors.grey)),
@@ -306,7 +316,7 @@ class _BalanceBarCard extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  Text('Saldo',
+                  Text(s.saldo,
                       style: TextStyle(
                           fontSize: 13,
                           color:
@@ -322,8 +332,8 @@ class _BalanceBarCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Semantics(
-              label: 'Gráfico de barras: despesas ${formatBRL(totalDespesas)}, '
-                  'receitas ${formatBRL(totalReceitas)}, saldo $saldoTexto',
+              label: s.graficoAcessivel(
+                  moeda(totalDespesas), moeda(totalReceitas), saldoTexto),
               child: SizedBox(
                 height: 220,
                 child: BarChart(
@@ -495,7 +505,9 @@ class _DaySummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final days = sortedDays(dayMap);
-    final df = DateFormat('EEE, dd/MM', 'pt_BR');
+    final s = context.strings;
+    String dataCurta(DateTime d) =>
+        formatDate(d, (p) => p.weekdayDayMonth);
 
     return Card(
       color: corDestaque,
@@ -504,7 +516,7 @@ class _DaySummaryCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text('Gastos por dia',
+            child: Text(s.gastosPorDia,
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -527,10 +539,12 @@ class _DaySummaryCard extends StatelessWidget {
                 ),
               ),
               title: Text(
-                df.format(day),
+                dataCurta(day),
                 style: const TextStyle(fontSize: 13),
               ),
-              trailing: Text(formatBRL(dayMap[day]!),
+              trailing: Text(
+                  formatMoney(dayMap[day]!,
+                      Localizations.localeOf(context)),
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, fontSize: 15)),
               children: [
@@ -594,10 +608,12 @@ class _CategoryCard extends StatelessWidget {
                           Icon(Icons.circle, size: 12, color: entry.key.color),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Text(entry.key.label,
+                            child: Text(categoryLabelOf(context, entry.key),
                                 style: const TextStyle(fontSize: 13)),
                           ),
-                          Text(formatBRL(entry.value),
+                          Text(
+                              formatMoney(entry.value,
+                                  Localizations.localeOf(context)),
                               style: const TextStyle(fontSize: 13)),
                         ],
                       ),
@@ -645,7 +661,7 @@ class _PaymentCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text('Por forma de pagamento',
+            child: Text(context.strings.porPagamento,
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -656,8 +672,9 @@ class _PaymentCard extends StatelessWidget {
           for (final entry in data.entries)
             ExpansionTile(
               leading: Icon(icons[entry.key]),
-              title: Text(entry.key.label),
-              trailing: Text(formatBRL(entry.value)),
+              title: Text(paymentLabelOf(context, entry.key)),
+              trailing: Text(formatMoney(entry.value,
+                  Localizations.localeOf(context))),
               children: [
                 for (final e in _expensesOf(entry.key))
                   ExpenseTile(expense: e),

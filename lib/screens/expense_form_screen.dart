@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-
+import '../l10n/app_locale.dart';
+import '../l10n/l10n_format.dart';
 import '../models/models.dart';
 import '../services/receipt_parser.dart';
 import '../services/receipt_photo.dart';
@@ -111,16 +111,18 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         ReceiptParser.parseParcelaSuffix(_estabelecimento.text.trim());
     if (parcela == null || parcela.atual >= parcela.total) return null;
     final restantes = parcela.total - parcela.atual + 1;
+    final s = context.strings;
+    final agora = '${parcela.atual}/${parcela.total}';
+    final ate = '${parcela.total}/${parcela.total}';
     final centavos = parseMoneyInput(_valor.text);
     if (centavos == null) {
-      return 'Serão criados $restantes lançamentos mensais '
-          '(${parcela.atual}/${parcela.total} até '
-          '${parcela.total}/${parcela.total}), um por mês.';
+      return s.parcelaAvisoSemValor(restantes, agora, ate);
     }
     final porParcela = centavos ~/ restantes;
-    return 'Serão criados $restantes lançamentos mensais de '
-        '${formatBRL(porParcela)} (${parcela.atual}/${parcela.total} até '
-        '${parcela.total}/${parcela.total}), um por mês.';
+    return s.parcelaAvisoComValor(restantes,
+        formatMoney(porParcela, Localizations.maybeLocaleOf(context)),
+        agora,
+        ate);
   }
 
   /// `true` quando o usuário alterou algo desde a abertura da tela.
@@ -247,25 +249,20 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     }
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    final s = context.strings;
     Navigator.of(context).pop();
     // Avisos aparecem na tela anterior (Home).
     if (_fotoNaoGuardada) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Lançamento salvo, mas a foto do cupom não pôde ser guardada.',
-          ),
-        ),
+        SnackBar(content: Text(s.lancamentoSalvoFotoNao)),
       );
     }
     if (!_isEdit && criados > 1) {
       final parcela = ReceiptParser.parseParcelaSuffix(novo.estabelecimento);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            'Parcela ${parcela!.atual}/${parcela.total} salva: '
-            'valor dividido em $criados lançamentos mensais.',
-          ),
+          content: Text(s.parcelaSalva(
+              parcela!.atual, parcela.total, criados)),
         ),
       );
     }
@@ -311,19 +308,16 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Cancelar lançamento?'),
-        content: const Text(
-          'Você tem informações não salvas. Deseja cancelar e perder '
-          'todas as alterações?',
-        ),
+        title: Text(context.strings.cancelarLancamento),
+        content: Text(context.strings.cancelarLancamentoMsg),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Continua editando'),
+            child: Text(context.strings.continuarEditando),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sim, cancelar'),
+            child: Text(context.strings.simCancelar),
           ),
         ],
       ),
@@ -334,6 +328,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   @override
   Widget build(BuildContext context) {
     final d = widget.fromDraft;
+    final s = context.strings;
     return PopScope(
       canPop: !hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, result) async {
@@ -351,8 +346,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_isEdit
-              ? 'Editar ${_isReceita ? 'receita' : 'gasto'}'
-              : 'Nova ${_isReceita ? 'receita' : 'despesa'}'),
+              ? (_isReceita ? s.editarReceita : s.editarGasto)
+              : (_isReceita ? s.novaReceita : s.novaDespesa)),
         ),
         body: Form(
           key: _formKey,
@@ -361,16 +356,16 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
             children: [
               if (!_isEdit && d == null)
                 SegmentedButton<EntryKind>(
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: EntryKind.despesa,
-                      icon: Icon(Icons.shopping_cart_outlined),
-                      label: Text('Despesa'),
+                      icon: const Icon(Icons.shopping_cart_outlined),
+                      label: Text(s.despesa),
                     ),
                     ButtonSegment(
                       value: EntryKind.receita,
-                      icon: Icon(Icons.attach_money),
-                      label: Text('Receita'),
+                      icon: const Icon(Icons.attach_money),
+                      label: Text(s.receita),
                     ),
                   ],
                   selected: {_tipo},
@@ -399,8 +394,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Dados extraídos do cupom.\nConfira '
-                                'antes de salvar.',
+                                s.dadosExtraidos,
                                 style: TextStyle(color: primary),
                               ),
                             ),
@@ -414,20 +408,19 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               ],
               TextFormField(
                 controller: _valor,
-                decoration: const InputDecoration(
-                  labelText: 'Valor (R\$)',
-                  prefixText: 'R\$ ',
-                  hintText: '0,00',
+                decoration: InputDecoration(
+                  labelText: s.valorLabel(s.currencySymbol),
+                  prefixText: '${s.currencySymbol} ',
+                  hintText: s.valorHint,
                 ),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
                 ],
-                validator: (v) =>
-                    parseMoneyInput(v ?? '') == null
-                        ? 'Informe o valor'
-                        : null,
+                validator: (v) => parseMoneyInput(v ?? '') == null
+                    ? s.informeValor
+                    : null,
                 autofocus: !_isEdit && d == null,
                 onChanged: (_) => setState(() {}),
               ),
@@ -435,7 +428,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               TextFormField(
                 controller: _estabelecimento,
                 decoration: InputDecoration(
-                    labelText: _isReceita ? 'Origem' : 'Estabelecimento'),
+                    labelText:
+                        _isReceita ? s.origem : s.estabelecimento),
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) => setState(() {}),
               ),
@@ -465,7 +459,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               TextFormField(
                 controller: _descricao,
                 decoration:
-                    const InputDecoration(labelText: 'Descrição (opcional)'),
+                    InputDecoration(labelText: s.descricaoOpcional),
                 textCapitalization: TextCapitalization.sentences,
                 // Precisa de setState: sem rebuild, o canPop do PopScope não
                 // atualiza e a saída perderia o texto digitado sem perguntar.
@@ -475,10 +469,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               DropdownButtonFormField<Category>(
                 key: ValueKey(_tipo),
                 initialValue: _categoria,
-                decoration: const InputDecoration(labelText: 'Categoria'),
+                decoration: InputDecoration(labelText: s.categoria),
                 items: [
                   for (final c in _opcoesCategoria)
-                    DropdownMenuItem(value: c, child: Text(c.label)),
+                    DropdownMenuItem(
+                        value: c, child: Text(categoryLabelOf(context, c))),
                 ],
                 onChanged: (c) => setState(() => _categoria = c!),
               ),
@@ -486,10 +481,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               DropdownButtonFormField<PaymentMethod>(
                 initialValue: _forma,
                 decoration:
-                    const InputDecoration(labelText: 'Forma de pagamento'),
+                    InputDecoration(labelText: s.formaPagamento),
                 items: [
                   for (final p in PaymentMethod.values)
-                    DropdownMenuItem(value: p, child: Text(p.label)),
+                    DropdownMenuItem(
+                        value: p, child: Text(paymentLabelOf(context, p))),
                 ],
                 onChanged: (p) => setState(() => _forma = p!),
               ),
@@ -497,17 +493,17 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.event),
-                title: const Text('Data e hora'),
-                subtitle:
-                    Text(DateFormat('dd/MM/yyyy  HH:mm', 'pt_BR').format(
-                        _dataHora)),
+                title: Text(s.dataHora),
+                subtitle: Text(
+                  formatDate(_dataHora, (p) => p.dayMonthYearTime),
+                ),
                 trailing: const Icon(Icons.edit_calendar),
                 onTap: _pickDate,
               ),
               if (d != null)
                 ExpansionTile(
                   leading: const Icon(Icons.text_snippet),
-                  title: const Text('Texto lido do cupom'),
+                  title: Text(s.textoCupom),
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(8),
@@ -529,8 +525,9 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                         child:
                             CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.check),
-                label:
-                    Text(_isEdit ? 'Salvar alterações' : 'Salvar gasto'),
+                label: Text(_isEdit
+                    ? s.salvarAlteracoes
+                    : (_isReceita ? s.salvarReceita : s.salvarGasto)),
                 onPressed: _saving ? null : _save,
               ),
             ],
@@ -567,9 +564,9 @@ class _FotoCupomCard extends StatelessWidget {
               child: Image.file(
                 File(caminho),
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text('A foto do cupom não pôde ser exibida.'),
+                errorBuilder: (_, __, ___) => Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(context.strings.fotoCupomErro),
                 ),
               ),
             ),
@@ -584,15 +581,15 @@ class _FotoCupomCard extends StatelessWidget {
               child: Image.file(
                 File(caminho),
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Center(
-                  child: Text('A foto do cupom não pôde ser exibida.'),
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(context.strings.fotoCupomErro),
                 ),
               ),
             ),
-            const ListTile(
-              leading: Icon(Icons.photo_camera_outlined),
-              title: Text('Foto do cupom'),
-              subtitle: Text('Toque para ampliar'),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(context.strings.fotoCupom),
+              subtitle: Text(context.strings.toqueAmpliar),
             ),
           ],
         ),

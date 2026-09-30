@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../l10n/app_locale.dart';
 import '../models/models.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
@@ -160,6 +161,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    // Frases capturadas antes dos awaits: o contexto pode sair da arvore
+    // enquanto a imagem do avatar e gravada.
+    final perfilAtualizado = context.strings.perfilAtualizado;
     setState(() => _saving = true);
     await ref
         .read(profileProvider.notifier)
@@ -202,7 +206,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (_isEdit) {
       navigator.pop();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Perfil atualizado')),
+        SnackBar(content: Text(perfilAtualizado)),
       );
     }
   }
@@ -214,19 +218,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final descartar = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Descartar alterações?'),
-        content: const Text(
-          'Você mudou o perfil e ainda não salvou. Sair agora descarta '
-          'as alterações.',
-        ),
+        title: Text(context.strings.descartarAlteracoes),
+        content: Text(context.strings.descartarAlteracoesMsg),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Continuar editando'),
+            child: Text(context.strings.continuarEditando),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Descartar e sair'),
+            child: Text(context.strings.descartarSair),
           ),
         ],
       ),
@@ -246,21 +247,21 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.emoji_emotions_outlined),
-              title: const Text('Escolher emoticon'),
-              subtitle: const Text('Grade com todos os emojis'),
+              title: Text(context.strings.escolherEmoji),
+              subtitle: Text(context.strings.gradeEmojis),
               onTap: () =>
                   Navigator.of(sheetContext).pop(_OpcaoAvatar.emoji),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Foto da galeria'),
-              subtitle: const Text('Imagem de até 5 MB'),
+              title: Text(context.strings.fotoGaleria),
+              subtitle: Text(context.strings.imagemAte5MB),
               onTap: () =>
                   Navigator.of(sheetContext).pop(_OpcaoAvatar.galeria),
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Tirar foto'),
+              title: Text(context.strings.tirarFoto),
               onTap: () =>
                   Navigator.of(sheetContext).pop(_OpcaoAvatar.camera),
             ),
@@ -268,16 +269,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.crop_outlined),
-                title: const Text('Ajustar posição e recorte'),
-                subtitle: const Text('Arrastar para posicionar, zoom abaixo'),
+                title: Text(context.strings.ajustarRecorte),
+                subtitle: Text(context.strings.arrastarRecorte),
                 onTap: () =>
                     Navigator.of(sheetContext).pop(_OpcaoAvatar.ajustar),
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline,
                     color: Colors.redAccent),
-                title: const Text('Remover foto'),
-                subtitle: const Text('Voltar a usar o emoticon'),
+                title: Text(context.strings.removerFoto),
+                subtitle: Text(context.strings.voltarEmoticon),
                 onTap: () =>
                     Navigator.of(sheetContext).pop(_OpcaoAvatar.remover),
               ),
@@ -333,7 +334,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       if (picked == null || !mounted) return;
       // Recusa antes de decodificar (mesma proteção do cupom fiscal).
       final tamanho = await File(picked.path).length();
-      final erro = validarTamanhoAvatar(tamanho);
+      final erro = validarTamanhoAvatar(tamanho, context.strings);
       if (!mounted) return;
       if (erro != null) {
         ScaffoldMessenger.of(context)
@@ -360,7 +361,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível usar a imagem: $e')),
+        SnackBar(content: Text(context.strings.imagemInvalida('$e'))),
       );
     } finally {
       if (mounted) setState(() => _escolhendoFoto = false);
@@ -514,7 +515,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Widget _cabecalho(Color onCor) => Column(
     children: [
       Text(
-        _isEdit ? 'Editar perfil' : 'Bem-vindo!',
+        _isEdit ? context.strings.editarPerfil : context.strings.bemVindo,
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 26,
@@ -524,9 +525,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       ),
       const SizedBox(height: 8),
       Text(
-        _isEdit
-            ? 'Ajuste seu nome, avatar e cor de fundo.'
-            : 'Vamos criar seu perfil para personalizar o app.',
+        _isEdit ? context.strings.ajustePerfil : context.strings.vamosCriarPerfil,
         textAlign: TextAlign.center,
         style: TextStyle(color: onCor.withValues(alpha: 0.7)),
       ),
@@ -559,7 +558,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Tooltip(
-            message: 'Toque para trocar o avatar',
+            message: context.strings.toqueTrocarAvatar,
             child: InkWell(
               key: const ValueKey('avatar-preview'),
               onTap: _menuAvatar,
@@ -616,7 +615,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             // \u200B (zero-width) ao final: evita que `find.text(nome)`
             // dos testes conte a prévia junto com o campo de texto —
             // visualmente idêntico ao nome digitado.
-            '${_nome.text.trim().isEmpty ? 'Seu nome' : _nome.text.trim()}\u200B',
+            '${_nome.text.trim().isEmpty ? context.strings.seuNome : _nome.text.trim()}\u200B',
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -652,7 +651,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       // errada (ex.: branco sobre fundo claro, sem contraste).
       style: TextStyle(color: onCor),
       decoration: InputDecoration(
-        labelText: 'Nome do usuário',
+        labelText: context.strings.nomeUsuario,
         labelStyle: TextStyle(color: onCor.withValues(alpha: 0.7)),
         floatingLabelStyle: TextStyle(color: onCor),
         prefixIcon: const Icon(Icons.person_outline),
@@ -881,7 +880,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : Icon(_isEdit ? Icons.check : Icons.arrow_forward),
-      label: Text(_isEdit ? 'Salvar' : 'Começar'),
+      label: Text(_isEdit ? context.strings.salvar : context.strings.comecar),
     ),
   );
 }
@@ -1037,7 +1036,7 @@ class _AjusteFotoSheetState extends State<_AjusteFotoSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
               child: Text(
-                'Ajustar foto',
+                context.strings.ajustarFoto,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -1046,7 +1045,7 @@ class _AjusteFotoSheetState extends State<_AjusteFotoSheet> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(
-                'Arraste a foto para posicionar o recorte.',
+                context.strings.ajustarFotoDica,
                 style: theme.textTheme.bodySmall,
                 textAlign: TextAlign.center,
               ),

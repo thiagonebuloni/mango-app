@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/app_locale.dart';
+import '../l10n/app_strings.dart';
 import '../models/models.dart';
 import '../services/seguranca.dart';
 import '../state/providers.dart';
@@ -19,11 +21,14 @@ class SegurancaScreen extends ConsumerStatefulWidget {
 }
 
 /// Mensagem legível para os erros que os diálogos podem devolver.
-String _mensagemErro(Object e) {
+///
+/// [strings] entra como parâmetro para que o texto de rede (o único que o
+/// app traduz) saia no idioma vigente.
+String _mensagemErro(Object e, [AppStrings? strings]) {
   if (e is ArgumentError) return '${e.message}';
   if (e is FormatException) return e.message;
   if (e is StateError) return e.message;
-  return 'Não foi possível salvar: $e';
+  return '${(strings ?? AppStrings.of(null)).naoSalvarConfig}$e';
 }
 
 class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
@@ -52,14 +57,14 @@ class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Segurança')),
+      appBar: AppBar(title: Text(context.strings.seguranca)),
       body: ref.watch(segurancaProvider).when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Não foi possível ler a configuração de segurança: $e',
+                  '${context.strings.erroSalvarConfig} $e',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -75,75 +80,79 @@ class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
 
   // ---------------- bloqueio desativado ----------------
 
-  List<Widget> _semBloqueio() => [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
-          child: Icon(Icons.lock_open_outlined, size: 64, color: Colors.grey),
+  List<Widget> _semBloqueio() {
+    final s = context.strings;
+    return [
+      const Padding(
+        padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
+        child: Icon(Icons.lock_open_outlined, size: 64, color: Colors.grey),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Text(
+          s.bloqueioDesativado,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'O bloqueio do app está desativado',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        child: Text(
+          s.bloqueioDesativadoDetalhe,
+          textAlign: TextAlign.center,
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(24, 8, 24, 16),
-          child: Text(
-            'Com um PIN de 4 a 6 dígitos, o Mango pede a senha toda vez que '
-            'abre ou volta do segundo plano. Os dados continuam só neste '
-            'aparelho — o PIN só evita que quem pegar o celular destravado '
-            'veja seus lançamentos.',
-            textAlign: TextAlign.center,
-          ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: FilledButton.icon(
+          onPressed: _criarPin,
+          icon: const Icon(Icons.lock_outline),
+          label: Text(s.criarPin),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: FilledButton.icon(
-            onPressed: _criarPin,
-            icon: const Icon(Icons.lock_outline),
-            label: const Text('Criar PIN'),
-          ),
-        ),
-      ];
+      ),
+    ];
+  }
 
   // ---------------- bloqueio ativo ----------------
 
-  List<Widget> _comBloqueio(SegurancaConfig config) => [
-        ListTile(
-          leading: const Icon(Icons.dialpad),
-          title: const Text('PIN ativo'),
-          subtitle: Text('${config.pinTamanho} dígitos'),
-        ),
-        SwitchListTile(
-          secondary: const Icon(Icons.fingerprint),
-          title: const Text('Desbloquear com biometria'),
-          subtitle: Text(_legendaBiometria()),
-          value: config.biometria,
-          onChanged:
-              _biometriaDisponivel == false ? null : _alternarBiometria,
-        ),
-        ListTile(
-          leading: const Icon(Icons.password),
-          title: const Text('Alterar PIN'),
-          onTap: _alterarPin,
-        ),
-        ListTile(
-          leading: const Icon(Icons.lock_open_outlined),
-          title: const Text('Desativar bloqueio'),
-          onTap: _desativar,
-        ),
-      ];
+  List<Widget> _comBloqueio(SegurancaConfig config) {
+    final s = context.strings;
+    return [
+      ListTile(
+        leading: const Icon(Icons.dialpad),
+        title: Text(s.pinAtivo),
+        subtitle: Text(s.pinDigitos(config.pinTamanho)),
+      ),
+      SwitchListTile(
+        secondary: const Icon(Icons.fingerprint),
+        title: Text(s.desbloquearBiometria),
+        subtitle: Text(_legendaBiometria()),
+        value: config.biometria,
+        onChanged:
+            _biometriaDisponivel == false ? null : _alternarBiometria,
+      ),
+      ListTile(
+        leading: const Icon(Icons.password),
+        title: Text(s.alterarPin),
+        onTap: _alterarPin,
+      ),
+      ListTile(
+        leading: const Icon(Icons.lock_open_outlined),
+        title: Text(s.desativarBloqueio),
+        onTap: _desativar,
+      ),
+    ];
+  }
 
   String _legendaBiometria() {
+    final s = context.strings;
     switch (_biometriaDisponivel) {
       case null:
-        return 'Conferindo o aparelho…';
+        return s.conferindoAparelho;
       case false:
-        return 'Este aparelho não tem biometria cadastrada';
+        return s.semBiometria;
       case true:
-        return 'Digital/rosto do aparelho, com o PIN como reserva';
+        return s.biometriaReserva;
     }
   }
 
@@ -151,45 +160,44 @@ class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
     try {
       await ref.read(segurancaProvider.notifier).setBiometria(valor);
     } catch (e) {
-      _avisar(_mensagemErro(e));
+      _avisar(_mensagemErro(e, context.strings));
     }
   }
 
   // ---------------- ações ----------------
 
   Future<void> _criarPin() async {
+    final s = context.strings;
     final criado = await _pedirPin(
-      titulo: 'Criar PIN',
-      campos: const ['Novo PIN (4 a 6 dígitos)', 'Confirme o PIN'],
-      rotuloAcao: 'Criar',
+      titulo: s.criarPin,
+      campos: [s.novoPin, s.confirmePin],
+      rotuloAcao: s.criar,
       confirmarUltimo: true,
       aoConfirmar: (valores) => ref
           .read(segurancaProvider.notifier)
           .ativar(pin: valores.first, biometria: false),
     );
     if (criado != true) return;
-    _avisar('Bloqueio ativado.');
+    _avisar(s.bloqueioAtivado);
     // Só oferece a biometria se o aparelho realmente tiver uma cadastrada.
     if (_biometriaDisponivel == true) await _oferecerBiometria();
   }
 
   Future<void> _oferecerBiometria() async {
+    final s = context.strings;
     final aceitou = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Usar biometria?'),
-        content: const Text(
-          'Além do PIN, o Mango pode pedir a digital/rosto do aparelho para '
-          'desbloquear. O PIN continua valendo como reserva.',
-        ),
+        title: Text(s.usarBiometria),
+        content: Text(s.biometriaTituloMsg),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Agora não'),
+            child: Text(s.agoraNao),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Ativar'),
+            child: Text(s.ativar),
           ),
         ],
       ),
@@ -197,39 +205,41 @@ class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
     if (aceitou != true) return;
     try {
       await ref.read(segurancaProvider.notifier).setBiometria(true);
-      _avisar('Biometria ativada.');
+      _avisar(s.biometriaAtivada);
     } catch (e) {
-      _avisar(_mensagemErro(e));
+      _avisar(_mensagemErro(e, context.strings));
     }
   }
 
   Future<void> _alterarPin() async {
+    final s = context.strings;
     final alterado = await _pedirPin(
-      titulo: 'Alterar PIN',
-      campos: const [
-        'PIN atual',
-        'Novo PIN (4 a 6 dígitos)',
-        'Confirme o novo PIN',
+      titulo: s.alterarPin,
+      campos: [
+        s.pinAtual,
+        s.novoPin,
+        s.confirmeNovoPin,
       ],
-      rotuloAcao: 'Alterar',
+      rotuloAcao: s.alterar,
       confirmarUltimo: true,
       aoConfirmar: (valores) => ref
           .read(segurancaProvider.notifier)
           .alterarPin(atual: valores[0], novo: valores[1]),
     );
-    if (alterado == true) _avisar('PIN alterado.');
+    if (alterado == true) _avisar(s.pinAlterado);
   }
 
   Future<void> _desativar() async {
+    final s = context.strings;
     final desativado = await _pedirPin(
-      titulo: 'Desativar bloqueio',
-      campos: const ['PIN atual'],
-      rotuloAcao: 'Desativar',
+      titulo: s.desativarBloqueio,
+      campos: [s.pinAtual],
+      rotuloAcao: s.desativar,
       aoConfirmar: (valores) => ref
           .read(segurancaProvider.notifier)
           .desativar(atual: valores.first),
     );
-    if (desativado == true) _avisar('Bloqueio desativado.');
+    if (desativado == true) _avisar(s.bloqueioDesativadoOk);
   }
 
   /// Diálogo de PIN com [campos] entradas mascaradas.
@@ -313,12 +323,13 @@ class _DialogoPinState extends State<_DialogoPin> {
       if (!mounted) return;
       setState(() {
         _ocupado = false;
-        _erro = _mensagemErro(e);
+        _erro = _mensagemErro(e, context.strings);
       });
     }
   }
   @override
   Widget build(BuildContext context) {
+    final s = context.strings;
     return AlertDialog(
       title: Text(widget.titulo),
       content: Form(
@@ -346,12 +357,12 @@ class _DialogoPinState extends State<_DialogoPin> {
                   validator: (valor) {
                     final texto = valor ?? '';
                     if (!pinValido(texto)) {
-                      return 'Use de $kPinMinimo a $kPinMaximo dígitos.';
+                      return s.pinRegra(kPinMinimo, kPinMaximo);
                     }
                     if (widget.confirmarUltimo &&
                         i == widget.campos.length - 1 &&
                         texto != _controladores[i - 1].text) {
-                      return 'Os PINs não conferem.';
+                      return s.pinsNaoConferem;
                     }
                     return null;
                   },
@@ -374,7 +385,7 @@ class _DialogoPinState extends State<_DialogoPin> {
       actions: [
         TextButton(
           onPressed: _ocupado ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
+          child: Text(s.cancel),
         ),
         FilledButton(
           onPressed: _ocupado ? null : _enviar,

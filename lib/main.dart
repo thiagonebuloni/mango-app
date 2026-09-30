@@ -9,6 +9,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'db/db.dart';
+import 'l10n/app_locale.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/lock_screen.dart';
@@ -19,8 +20,14 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Intl.defaultLocale = 'pt_BR';
+  // Idioma do sistema: inglês (qualquer en_*) abre em en-US; o resto abre
+  // em pt-BR (comportamento atual). O MaterialApp resolve de novo via
+  // [localeResolutionCallback] quando o sistema troca com o app aberto.
+  final system = WidgetsBinding.instance.platformDispatcher.locale;
+  final initial = resolveAppLocale(system);
+  Intl.defaultLocale = intlLocaleName(initial);
   await initializeDateFormatting('pt_BR');
+  await initializeDateFormatting('en_US');
   // Registro de falhas local: ligado antes de tudo, para pegar também um erro
   // de abertura (banco/perfil) — que hoje sumiria só no logcat.
   await iniciarLogDeFalhas();
@@ -78,7 +85,16 @@ void instalarHandlersDeErro({Directory? dir, bool? telaAmigavel}) {
 }
 
 class MangoApp extends ConsumerWidget {
-  const MangoApp({super.key});
+  const MangoApp({super.key, this.localeTest});
+
+  /// Fixa o idioma do app, ignorando o do sistema.
+  ///
+  /// Só para teste: o ambiente do `flutter_test` resolve sempre para `en_US`,
+  /// então um teste que espera as frases em pt-BR precisa dizer qual é o
+  /// idioma do "aparelho" por outro caminho que não o `localeTestValue` da
+  /// plataforma (que não chega ao `localeResolutionCallback`). Em produção o
+  /// parâmetro fica `null` e vale o idioma do sistema.
+  final Locale? localeTest;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -97,8 +113,10 @@ class MangoApp extends ConsumerWidget {
         corAcento: corAcentoDoPerfil(perfil),
       ),
       home: const LockGate(child: ProfileGate()),
-      locale: const Locale('pt', 'BR'),
-      supportedLocales: const [Locale('pt', 'BR')],
+      supportedLocales: supportedAppLocales,
+      locale: localeTest,
+      localeResolutionCallback: (locale, supported) =>
+          localeTest ?? resolveAppLocale(locale),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -126,7 +144,7 @@ class ProfileGate extends ConsumerWidget {
     return ref.watch(profileProvider).when(
           loading: () => const MangoSplash(),
           error: (e, _) => Scaffold(
-            body: Center(child: Text('Erro ao carregar o perfil: $e')),
+            body: Center(child: Text(context.strings.erroPerfil('$e'))),
           ),
           data: (perfil) => perfil == null
               ? const FirstRunScreen()
@@ -183,7 +201,7 @@ class _LockGateState extends ConsumerState<LockGate>
           loading: () => const MangoSplash(),
           error: (e, _) => Scaffold(
             body: Center(
-              child: Text('Erro ao carregar a segurança do app: $e'),
+              child: Text(context.strings.erroSegurancaApp('$e')),
             ),
           ),
           data: (config) {
@@ -195,7 +213,6 @@ class _LockGateState extends ConsumerState<LockGate>
         );
   }
 }
-
 
 /// Parte da tela que falhou, em release.
 ///

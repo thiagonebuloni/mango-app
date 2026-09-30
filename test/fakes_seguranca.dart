@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mango/l10n/app_locale.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/services/seguranca.dart';
 import 'package:mango/state/providers.dart';
@@ -177,6 +179,20 @@ ProviderScope escopoDeSeguranca({
       child: child,
     );
 
-/// App mínimo (sem o tema do perfil) para as telas que não testam cor.
-Widget appDeTeste(Widget home) =>
-    MaterialApp(home: home, locale: const Locale('pt', 'BR'));
+/// App de teste no mesmo idioma por omissão do app (pt-BR).
+///
+/// O [locale] sozinho não basta: sem `supportedLocales` o MaterialApp
+/// considera o locale pedido não suportado e cai no seu padrão (`en_US`) —
+/// e as frases do app saem em inglês. Aqui o app de teste usa os mesmos
+/// locales e delegates de `main.dart`, com o idioma explícito.
+Widget appDeTeste(Widget home, {Locale locale = const Locale('pt', 'BR')}) =>
+    MaterialApp(
+      home: home,
+      locale: locale,
+      supportedLocales: supportedAppLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+    );

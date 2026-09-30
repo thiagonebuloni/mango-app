@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/screens/expense_form_screen.dart';
 import 'package:mango/state/providers.dart';
+import 'fakes_seguranca.dart';
 import 'package:mango/services/receipt_parser.dart';
 
 void main() {
@@ -15,7 +16,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp(home: const ExpenseFormScreen()),
+          child: appDeTeste(const ExpenseFormScreen()),
         ),
       );
       await tester.pumpAndSettle();
@@ -38,7 +39,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp(home: const ExpenseFormScreen()),
+          child: appDeTeste(const ExpenseFormScreen()),
         ),
       );
       await tester.pumpAndSettle();
@@ -53,7 +54,7 @@ void main() {
     testWidgets('mexer em qualquer campo torna o form sujo', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp(home: const ExpenseFormScreen()),
+          child: appDeTeste(const ExpenseFormScreen()),
         ),
       );
       await tester.pumpAndSettle();
@@ -81,7 +82,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp(home: const ExpenseFormScreen()),
+          child: appDeTeste(const ExpenseFormScreen()),
         ),
       );
       await tester.pumpAndSettle();
@@ -104,7 +105,7 @@ void main() {
       expect(find.byType(TimePickerDialog), findsOneWidget);
 
       // Cancela a hora: a data muda, mas hora/minuto ficam como estavam.
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text('Cancelar')); // pt-BR do app de teste
       await tester.pumpAndSettle();
 
       final depois = dataExibida();

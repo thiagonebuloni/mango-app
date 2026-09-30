@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_locale.dart';
 import 'home_screen.dart';
 import 'reports_screen.dart';
 
@@ -44,6 +45,7 @@ class _RootNavState extends State<RootNav> {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.strings;
     return Scaffold(
       body: PageView(
         controller: _pageController,
@@ -57,16 +59,16 @@ class _RootNavState extends State<RootNav> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: _onDestinationSelected,
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Gastos',
+            icon: const Icon(Icons.receipt_long_outlined),
+            selectedIcon: const Icon(Icons.receipt_long),
+            label: s.gastos,
           ),
           NavigationDestination(
-            icon: Icon(Icons.pie_chart_outline),
-            selectedIcon: Icon(Icons.pie_chart),
-            label: 'Relatórios',
+            icon: const Icon(Icons.pie_chart_outline),
+            selectedIcon: const Icon(Icons.pie_chart),
+            label: s.relatorios,
           ),
         ],
       ),

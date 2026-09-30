@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../db/db.dart';
+import '../l10n/app_locale.dart';
 import '../models/models.dart';
 import '../services/categorizer.dart';
 import '../services/crash_log.dart';
 import '../services/ocr_service.dart';
 import '../services/receipt_parser.dart';
+import '../l10n/app_strings.dart';
 import 'expense_form_screen.dart';
 
 /// Tamanho máximo aceito para a foto do cupom (em bytes). Imagens maiores — em
@@ -24,12 +26,12 @@ const int kMaxReceiptImageBytes = 8 * 1024 * 1024;
 /// Foto grande demais para processar com segurança (decodificar + OCR
 /// alocaria muito mais memória e poderia travar o app). Retorna a mensagem
 /// de erro amigável, ou `null` se o tamanho for aceitável.
-String? validarTamanhoImagem(int tamanhoBytes) {
+String? validarTamanhoImagem(int tamanhoBytes, [AppStrings? strings]) {
   if (tamanhoBytes <= kMaxReceiptImageBytes) return null;
-  return 'A imagem é grande demais '
-      '(${(tamanhoBytes / (1024 * 1024)).toStringAsFixed(1)} MB, '
-      'máximo ${(kMaxReceiptImageBytes / (1024 * 1024)).toStringAsFixed(0)} MB). '
-      'Tire uma foto do cupom ou escolha uma imagem menor.';
+  final s = strings ?? AppStrings.of(null);
+  return s.imagemGrandeMsg(
+      (tamanhoBytes / (1024 * 1024)).toStringAsFixed(1),
+      (kMaxReceiptImageBytes / (1024 * 1024)).toStringAsFixed(0));
 }
 
 /// Captura a foto do cupom, roda o OCR on-device, interpreta os dados e
@@ -52,6 +54,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   }
 
   Future<void> _capture(ImageSource source) async {
+    // Captura as frases antes do primeiro `await`: o contexto pode sair da
+    // arvore enquanto a imagem e o OCR sao processados.
+    final s = context.strings;
     setState(() => _processing = true);
     try {
       final picked = await ImagePicker().pickImage(
@@ -67,13 +72,12 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       // Recusa a imagem antes de decodificá-la: arquivos enormes (galeria)
       // explodem a memória no decode/OCR e podem travar o app.
       final tamanho = await File(picked.path).length();
-      final erroTamanho = validarTamanhoImagem(tamanho);
+      final erroTamanho = validarTamanhoImagem(tamanho, s);
       if (erroTamanho != null) throw Exception(erroTamanho);
 
       final text = await _ocr.extractText(picked.path);
       if (text.trim().isEmpty) {
-        throw Exception(
-            'Não foi possível ler o cupom. Tente uma foto mais nítida.');
+        throw Exception(s.cupomIlegivel);
       }
 
       final draft = ReceiptParser.parse(text);
@@ -97,7 +101,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       if (!mounted) return;
       setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao ler o cupom: $erro')),
+        SnackBar(content: Text(s.falhaLerCupom('$erro'))),
       );
       // Fallback: formulário manual em branco.
       Navigator.of(context).pushReplacement(
@@ -118,16 +122,17 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.strings;
     return Scaffold(
-      appBar: AppBar(title: const Text('Foto do cupom')),
+      appBar: AppBar(title: Text(s.fotoCupomTitulo)),
       body: Center(
         child: _processing
-            ? const Column(
+            ? Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Lendo o cupom...'),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(s.lendoCupom),
                 ],
               )
             : Padding(
@@ -138,20 +143,17 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                     const Icon(Icons.receipt_long,
                         size: 72, color: Colors.grey),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Fotografe o cupom de cima, com boa luz e sem sombra.',
-                      textAlign: TextAlign.center,
-                    ),
+                    Text(s.dicaFoto, textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     FilledButton.icon(
                       icon: const Icon(Icons.photo_camera),
-                      label: const Text('Tirar foto'),
+                      label: Text(s.tirarFoto),
                       onPressed: () => _capture(ImageSource.camera),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.photo_library),
-                      label: const Text('Escolher da galeria'),
+                      label: Text(s.escolherGaleria),
                       onPressed: () => _capture(ImageSource.gallery),
                     ),
                   ],

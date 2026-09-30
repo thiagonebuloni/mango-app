@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../db/db.dart';
+import '../l10n/app_locale.dart';
+import '../l10n/l10n_format.dart';
 import '../models/models.dart';
 import '../screens/expense_form_screen.dart';
 import '../state/providers.dart';
@@ -71,7 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final year = await showDialog<int>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Selecionar ano'),
+        title: Text(context.strings.selecionarAno),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
@@ -98,7 +100,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancelar'),
+            child: Text(dialogContext.strings.cancel),
           ),
         ],
       ),
@@ -108,12 +110,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // ---- passo 2: mês do ano escolhido ----
     _dialogYear = year;
     _dialogMonth = (year == _visibleMonth.year) ? _visibleMonth.month : 1;
-    final monthNames = DateFormat('MMMM', 'pt_BR');
+    final s = context.strings;
+    final loc = Localizations.maybeLocaleOf(context);
+    final monthNames = DateFormat('MMMM', intlLocaleName(loc!));
     final month = await showDialog<int>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Selecionar mês de $year'),
+          title: Text(s.selecionarMesDe(year)),
           content: SizedBox(
             width: double.maxFinite,
             child: GridView.builder(
@@ -131,8 +135,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     year == now.year && m > now.month;
                 final selected = m == _dialogMonth;
                 final raw = monthNames.format(DateTime(year, m));
-                final label =
-                    '${raw[0].toUpperCase()}${raw.substring(1, 3)}';
+                final label = raw.length <= 3
+                    ? raw
+                    : '${raw[0].toUpperCase()}${raw.substring(1, 3)}';
                 return ChoiceChip(
                   label: Text(label),
                   selected: selected,
@@ -146,11 +151,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Voltar'),
+              child: Text(dialogContext.strings.voltar),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(_dialogMonth),
-              child: const Text('OK'),
+              child: Text(dialogContext.strings.ok),
             ),
           ],
         ),
@@ -175,19 +180,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Excluir gasto?'),
-        content: Text(
-          'Deseja excluir este gasto de ${formatBRL(expense.valorCentavos)}?',
-        ),
+        title: Text(context.strings.excluirGasto),
+        content: Text(dialogContext.strings
+            .excluirGastoMsg(formatMoney(expense.valorCentavos))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Não'),
+            child: Text(dialogContext.strings.nao),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Excluir'),
+            child: Text(dialogContext.strings.excluir),
           ),
         ],
       ),
@@ -198,7 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await ref.read(expensesProvider.notifier).delete(id);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gasto excluído')),
+        SnackBar(content: Text(context.strings.gastoExcluido)),
       );
     }
   }
@@ -212,7 +216,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Excluir',
+              title: Text(context.strings.excluirAcao,
                   style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -232,11 +236,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meus gastos'),
+        title: Text(context.strings.meusGastos),
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
-            tooltip: 'Menu',
+            tooltip: context.strings.menu,
             onPressed: () => showMenuApp(
               context,
               ref,
@@ -252,7 +256,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: expensesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erro ao carregar: $e')),
+        error: (e, _) => Center(child: Text(context.strings.erroCarregar('$e'))),
         data: (expenses) {
           final now = DateTime.now();
           // Gastos do mês visível (contexto selecionado nas setas/seletor).
@@ -293,17 +297,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               visibleExpenses = monthExpenses;
               break;
           }
+          final s = context.strings;
+          final loc = Localizations.localeOf(context);
+          String data(DateTime d) =>
+              formatDate(d, (p) => p.shortDayMonth, loc);
           final String? filtroLabel = switch (_filtro) {
-            _FiltroRapido.dia =>
-              'Gastos do dia ${DateFormat('dd/MM', 'pt_BR').format(d0)}',
+            _FiltroRapido.dia => s.gastosDoDia(data(d0)),
             _FiltroRapido.semana =>
-              'Gastos de ${DateFormat('dd/MM', 'pt_BR').format(w0)} a ${DateFormat('dd/MM', 'pt_BR').format(refNow)}',
-            _FiltroRapido.mes =>
-              'Gastos de ${DateFormat('MMMM yyyy', 'pt_BR').format(_monthStart)}',
+              s.gastosDeSemana(data(w0), data(refNow)),
+            _FiltroRapido.mes => s.gastosDeMes(
+                formatDate(_monthStart, (p) => p.monthName, loc)),
             null => null,
           };
           final monthLabel =
-              DateFormat('MMMM yyyy', 'pt_BR').format(_monthStart);
+              formatDate(_monthStart, (p) => p.monthYear, loc);
           final monthTitle =
               '${monthLabel[0].toUpperCase()}${monthLabel.substring(1)}';
 
@@ -353,7 +360,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          tooltip: 'Mês anterior',
+                          tooltip: context.strings.mesAnterior,
                           icon: const Icon(Icons.chevron_left),
                           onPressed: _previousMonth,
                         ),
@@ -373,7 +380,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         fontWeight: FontWeight.bold),
                                   ),
                                   Text(
-                                    formatBRL(totalOf(monthExpenses)),
+                                    formatMoney(totalOf(monthExpenses),
+                                        Localizations.localeOf(context)),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context)
@@ -387,7 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Próximo mês',
+                          tooltip: context.strings.proximoMes,
                           icon: const Icon(Icons.chevron_right),
                           onPressed: _isCurrentMonth ? null : _nextMonth,
                         ),
@@ -401,8 +409,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Center(
                       child: Text(
                         _filtro == null
-                            ? 'Nenhum gasto neste mês.\nUse o botão + para começar.'
-                            : 'Nenhum gasto neste período.\nToque no filtro para ver o mês.',
+                            ? context.strings.nenhumGastoMes
+                            : context.strings.nenhumGastoPeriodo,
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Colors.grey),
                       ),
@@ -429,7 +437,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             TextButton(
                               onPressed: () =>
                                   setState(() => _filtro = null),
-                              child: const Text('Limpar'),
+                              child: Text(context.strings.limpar),
                             ),
                           ],
                         ),
@@ -518,7 +526,7 @@ class _SummaryCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 FittedBox(
                   child: Text(
-                    formatBRL(value),
+                    formatMoney(value, Localizations.localeOf(context)),
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

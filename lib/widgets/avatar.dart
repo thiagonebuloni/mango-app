@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/app_strings.dart';
+
 import '../models/models.dart';
 
 /// Tamanho máximo aceito para a foto do avatar (em bytes).
@@ -21,12 +23,12 @@ const int kMaxAvatarImageBytes = 5 * 1024 * 1024;
 const double kAvatarMaxWidth = 1024;
 
 /// Mensagem de erro quando a foto passa do limite, ou `null` se aceitável.
-String? validarTamanhoAvatar(int tamanhoBytes) {
+String? validarTamanhoAvatar(int tamanhoBytes, [AppStrings? strings]) {
   if (tamanhoBytes <= kMaxAvatarImageBytes) return null;
-  return 'A imagem é grande demais '
-      '(${(tamanhoBytes / (1024 * 1024)).toStringAsFixed(1)} MB, '
-      'máximo ${(kMaxAvatarImageBytes / (1024 * 1024)).toStringAsFixed(0)} MB). '
-      'Escolha uma imagem menor.';
+  final s = strings ?? AppStrings.of(null);
+  return s.imagemAvatarGrande(
+      (tamanhoBytes / (1024 * 1024)).toStringAsFixed(1),
+      (kMaxAvatarImageBytes / (1024 * 1024)).toStringAsFixed(0));
 }
 
 /// Copia a imagem escolhida para a pasta de documentos do app e devolve o

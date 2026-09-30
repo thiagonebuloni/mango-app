@@ -19,9 +19,34 @@ import '../screens/seguranca_screen.dart';
 import '../services/app_info.dart';
 import '../state/providers.dart';
 
-final _brl = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$', decimalDigits: 2);
+import '../l10n/app_locale.dart';
+import '../l10n/app_strings.dart';
+import '../l10n/l10n_format.dart';
 
-String formatBRL(int centavos) => _brl.format(centavos / 100);
+/// Moeda no locale vigente (compat: sem locale = pt-BR, igual a antes).
+String formatBRL(int centavos, [Locale? locale]) =>
+    formatMoney(centavos, locale ?? const Locale('pt', 'BR'));
+
+/// Moeda no locale do [context] (telas devem preferir esta).
+String formatMoneyOf(BuildContext context, int centavos) =>
+    formatMoney(centavos, Localizations.localeOf(context));
+
+/// Data no locale do [context] usando o padrão escolhido.
+String formatDateOf(BuildContext context, DateTime date,
+        String Function(DatePatterns p) pick) =>
+    formatDate(date, pick, Localizations.localeOf(context));
+
+/// Locale intl (pt_BR/en_US) do [context] para DateFormat direto.
+String intlOf(BuildContext context) =>
+    intlLocaleName(Localizations.localeOf(context));
+
+/// Rótulos localizados (categoria/pagamento/tipo) no [context].
+String categoryLabelOf(BuildContext context, Category c) =>
+    context.strings.categoriaLabel(c.name);
+String paymentLabelOf(BuildContext context, PaymentMethod p) =>
+    context.strings.pagamentoLabel(p.name);
+String entryKindLabelOf(BuildContext context, EntryKind k) =>
+    context.strings.tipoLabel(k.name);
 
 /// Formata texto digitado ("1.234,56" ou "1234,5") em centavos.
 ///
@@ -127,6 +152,7 @@ class ExpenseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = expense;
+    final loc = Localizations.localeOf(context);
     return ListTile(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -141,13 +167,13 @@ class ExpenseTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        '${DateFormat('dd MMM', 'pt_BR').format(e.dataHora)} · ${e.categoria.label}'
-        '${e.origem == ExpenseOrigin.ocr ? ' · 📷 cupom' : ''}',
+        '${DateFormat(loc.languageCode == 'en' ? 'MMM dd' : 'dd MMM', intlLocaleName(loc)).format(e.dataHora)} · ${context.strings.categoriaLabel(e.categoria.name)}'
+        '${e.origem == ExpenseOrigin.ocr ? (loc.languageCode == 'en' ? ' · receipt' : ' · 📷 cupom') : ''}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       trailing: Text(
-        e.isReceita ? '+ ${formatBRL(e.valorCentavos)}' : formatBRL(e.valorCentavos),
+        e.isReceita ? '+ ${formatMoney(e.valorCentavos, loc)}' : formatMoney(e.valorCentavos, loc),
         style: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 15,
@@ -210,15 +236,15 @@ class NewExpenseMenu extends StatelessWidget {
               if (secao == _SecaoLancamento.inicial) ...[
                 ListTile(
                   leading: const Icon(Icons.shopping_cart_outlined),
-                  title: const Text('Despesas'),
-                  subtitle: const Text('Foto do cupom ou lançamento manual'),
+                  title: Text(context.strings.despesas),
+                  subtitle: Text(context.strings.fotoOuManual),
                   onTap: () =>
                       setSheetState(() => secao = _SecaoLancamento.despesas),
                 ),
                 ListTile(
                   leading: const Icon(Icons.attach_money),
-                  title: const Text('Receita'),
-                  subtitle: const Text('Lançamento manual de entrada'),
+                  title: Text(context.strings.receita),
+                  subtitle: Text(context.strings.receitaManual),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     Navigator.of(pageContext)
@@ -235,16 +261,16 @@ class NewExpenseMenu extends StatelessWidget {
               ] else ...[
                 ListTile(
                   leading: const Icon(Icons.arrow_back),
-                  title: const Text('Despesas'),
-                  subtitle: const Text('Foto do cupom ou lançamento manual'),
+                  title: Text(context.strings.despesas),
+                  subtitle: Text(context.strings.fotoOuManual),
                   onTap: () =>
                       setSheetState(() => secao = _SecaoLancamento.inicial),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.photo_camera),
-                  title: const Text('Foto do cupom fiscal'),
-                  subtitle: const Text('O app lê e preenche os dados'),
+                  title: Text(context.strings.fotoCupomFiscal),
+                  subtitle: Text(context.strings.appLePreenche),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     Navigator.of(pageContext)
@@ -256,8 +282,8 @@ class NewExpenseMenu extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.edit),
-                  title: const Text('Lançamento manual'),
-                  subtitle: const Text('Digite o gasto à mão'),
+                  title: Text(context.strings.lancamentoManual),
+                  subtitle: Text(context.strings.digiteGasto),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     Navigator.of(pageContext)
@@ -310,8 +336,8 @@ void showMenuApp(
             if (abaAtual != AbaPrincipal.gastos)
               ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
-                title: const Text('Gastos'),
-                subtitle: const Text('Lançamentos de despesas e receitas'),
+                title: Text(context.strings.gastos),
+                subtitle: Text(context.strings.lancamentosSub),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   onIrParaGastos?.call();
@@ -320,10 +346,8 @@ void showMenuApp(
             if (abaAtual != AbaPrincipal.relatorios)
               ListTile(
                 leading: const Icon(Icons.pie_chart_outline),
-                title: const Text('Relatórios'),
-                subtitle: const Text(
-                  'Totais por período, categoria e pagamento',
-                ),
+                title: Text(context.strings.relatorios),
+                subtitle: Text(context.strings.totaisSub),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   onIrParaRelatorios?.call();
@@ -331,8 +355,8 @@ void showMenuApp(
               ),
             ListTile(
               leading: const Icon(Icons.palette_outlined),
-              title: const Text('Editar perfil'),
-              subtitle: const Text('Nome, avatar e cor de fundo'),
+              title: Text(context.strings.editarPerfil),
+              subtitle: Text(context.strings.editarPerfilSub),
               onTap: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
@@ -346,8 +370,8 @@ void showMenuApp(
             ),
             ListTile(
               leading: const Icon(Icons.lock_outline),
-              title: const Text('Segurança'),
-              subtitle: const Text('Bloqueio do app com PIN e biometria'),
+              title: Text(context.strings.seguranca),
+              subtitle: Text(context.strings.segurancaSub),
               onTap: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
@@ -359,8 +383,8 @@ void showMenuApp(
             ),
             ListTile(
               leading: const Icon(Icons.upload_file_outlined),
-              title: const Text('Exportar em CSV'),
-              subtitle: const Text('Salvar backup dos lançamentos'),
+              title: Text(context.strings.exportar),
+              subtitle: Text(context.strings.exportarSub),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _exportarCsv(context, ref);
@@ -368,8 +392,8 @@ void showMenuApp(
             ),
             ListTile(
               leading: const Icon(Icons.download_outlined),
-              title: const Text('Importar em CSV'),
-              subtitle: const Text('Soma o CSV sem apagar registros'),
+              title: Text(context.strings.importarBackup),
+              subtitle: Text(context.strings.importarBackupSub),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _importarCsv(context, ref);
@@ -377,8 +401,8 @@ void showMenuApp(
             ),
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Diagnóstico'),
-              subtitle: const Text('Falhas registradas neste aparelho'),
+              title: Text(context.strings.diagnostico),
+              subtitle: Text(context.strings.diagnosticoMsg),
               onTap: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
@@ -391,7 +415,7 @@ void showMenuApp(
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('Sobre o Mango'),
+              title: Text(context.strings.sobre),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _sobre(context);
@@ -467,20 +491,17 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
       ShareParams(
         files: [XFile(file.path, mimeType: 'text/csv')],
         title: 'Backup Mango',
-        text: perfil == null
-            ? 'Backup com ${expenses.length} lançamento(s) do Mango.'
-            : 'Backup com ${expenses.length} lançamento(s) do Mango de ${perfil.nome}.',
+        text: context.strings.backupCom(expenses.length, perfil?.nome),
       ),
     );
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Backup sem senha (texto puro): guarde o arquivo em local seguro.',
-        ),
+      SnackBar(
+        content: Text(context.strings.backupAviso),
       ),
     );
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('Erro ao exportar: $e')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(context.strings.falhaExportar('$e'))));
   }
 }
 
@@ -491,20 +512,16 @@ Future<bool> _confirmarExportacao(BuildContext context) async {
   final confirmado = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Exportar backup?'),
-      content: const Text(
-        'O arquivo .csv é texto puro, sem senha: quem tiver acesso a ele vê '
-        'todo o seu histórico. Salve em um local seguro e evite enviá-lo para '
-        'conversas ou pastas compartilhadas.',
-      ),
+      title: Text(context.strings.exportar),
+      content: Text(context.strings.backupAviso),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancelar'),
+          child: Text(context.strings.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Exportar'),
+          child: Text(context.strings.exportar),
         ),
       ],
     ),
@@ -518,13 +535,13 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   List<PlatformFile> files;
   try {
     files = await FilePicker.pickFiles(
-      dialogTitle: 'Importar backup CSV',
+      dialogTitle: context.strings.importarBackup,
       type: FileType.custom,
       allowedExtensions: const ['csv'],
     );
   } catch (e) {
     messenger.showSnackBar(
-      SnackBar(content: Text('Erro ao abrir o seletor: $e')),
+      SnackBar(content: Text(context.strings.erroAbrirSeletor('$e'))),
     );
     return;
   }
@@ -548,7 +565,7 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     return;
   } catch (e) {
     messenger.showSnackBar(
-      SnackBar(content: Text('Erro ao ler o arquivo: $e')),
+      SnackBar(content: Text(context.strings.erroLerArquivo('$e'))),
     );
     return;
   }
@@ -561,53 +578,52 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   }
   if (result.expenses.isEmpty && result.perfil == null) {
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Nenhum lançamento válido encontrado no arquivo'),
+      SnackBar(
+        content: Text(context.strings.nenhumLancamentoArquivo),
       ),
     );
     return;
   }
   if (!context.mounted) return;
+  final tema = result.perfil!.temaClaro
+      ? context.strings.temaClaro
+      : context.strings.temaEscuro;
   final perfilMsg = result.perfil == null
       ? ''
-      : ' Perfil de ${result.perfil!.nome} (tema ${result.perfil!.temaClaro ? 'claro' : 'escuro'}) também será restaurado.';
+      : context.strings
+          .perfilTambemRestaurado(result.perfil!.nome, tema);
   final confirmado = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Importar backup?'),
-      content: Text(
-        'Os ${result.expenses.length} lançamento(s) do CSV serão somados '
-        'aos já existentes. Duplicatas são ignoradas e nenhum registro '
-        'do aparelho é apagado.$perfilMsg',
-      ),
+      title: Text(context.strings.importarBackupTitulo),
+      content: Text(context.strings
+          .importarBackupMsg(result.expenses.length, perfilMsg)),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Não'),
+          child: Text(context.strings.nao),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Importar'),
+          child: Text(context.strings.importar),
         ),
       ],
     ),
   );
   if (confirmado != true) return;
+  // Frases capturadas antes dos awaits (context não cruza gap assíncrono).
+  final s = context.strings;
   if (result.perfil != null) {
     await ref.read(profileProvider.notifier).save(result.perfil!);
   }
   final adicionados =
       await ref.read(expensesProvider.notifier).mergeAll(result.expenses);
   final duplicados = result.expenses.length - adicionados;
-  final ignoradas = result.skipped > 0
-      ? ' ${result.skipped} linha(s) inválida(s) ignorada(s).'
-      : '';
+  final ignoradas =
+      result.skipped > 0 ? s.ignoradasLines(result.skipped) : '';
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        'Importação concluída: $adicionados lançamento(s) novo(s), '
-        '$duplicados duplicado(s) ignorado(s).$ignoradas',
-      ),
+      content: Text(s.importacaoOk(adicionados, duplicados, ignoradas)),
     ),
   );
 }
@@ -625,10 +641,9 @@ Future<void> _sobre(BuildContext context) async {
     applicationName: 'Mango',
     applicationVersion: versao,
     applicationIcon: const Icon(Icons.account_balance_wallet, size: 40),
-    children: const [
+    children: [
       Text(
-        'Controle de gastos com leitura de cupom fiscal por OCR, 100% '
-        'offline. Os dados ficam somente no seu aparelho.',
+        context.strings.sobreTexto,
       ),
     ],
   );

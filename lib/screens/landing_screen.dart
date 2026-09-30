@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/app_locale.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/avatar.dart';
@@ -22,6 +23,7 @@ class LandingScreen extends ConsumerWidget {
     final cor = corFundoDoPerfil(perfil);
     final onCor = onBackgroundColor(cor);
     final nome = perfil?.nome.trim() ?? '';
+    final s = context.strings;
 
     return Scaffold(
       backgroundColor: cor,
@@ -40,7 +42,7 @@ class LandingScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  nome.isEmpty ? 'Olá!' : 'Olá, $nome!',
+                  nome.isEmpty ? s.ola : s.olaNome(nome),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
@@ -54,7 +56,7 @@ class LandingScreen extends ConsumerWidget {
                   child: FilledButton.icon(
                     onPressed: () => _abrirApp(context, 0),
                     icon: const Icon(Icons.receipt_long),
-                    label: const Text('Gastos'),
+                    label: Text(s.gastos),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -63,7 +65,7 @@ class LandingScreen extends ConsumerWidget {
                   child: FilledButton.icon(
                     onPressed: () => _abrirApp(context, 1),
                     icon: const Icon(Icons.pie_chart),
-                    label: const Text('Relatórios'),
+                    label: Text(s.relatorios),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -77,7 +79,7 @@ class LandingScreen extends ConsumerWidget {
                       onIrParaRelatorios: () => _abrirApp(context, 1),
                     ),
                     icon: const Icon(Icons.menu),
-                    label: const Text('Menu'),
+                    label: Text(s.menu),
                   ),
                 ),
               ],

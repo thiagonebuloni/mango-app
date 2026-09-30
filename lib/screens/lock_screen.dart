@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/app_locale.dart';
 import '../models/models.dart';
 import '../services/seguranca.dart';
 import '../state/providers.dart';
@@ -59,7 +60,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     if (await _travadoAgora()) return;
     final ok = await ref
         .read(autenticadorBiometricoProvider)
-        .autenticar('Desbloquear o Mango');
+        .autenticar(context.strings.desbloqueioMango);
     if (!mounted || !ok) return; // cancelou/erro: fica no PIN
     // O diálogo do sistema pode ter demorado: confere a espera de novo.
     if (await _travadoAgora()) return;
@@ -103,7 +104,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     setState(() {
       _verificando = false;
       _pin = '';
-      _erro = 'PIN incorreto';
+      _erro = context.strings.pinIncorreto;
     });
   }
 
@@ -120,23 +121,16 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   }
 
   void _esqueciMeuPin() {
+    final s = context.strings;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Esqueci meu PIN'),
-        content: const Text(
-          'O Mango é local: não existe e-mail nem servidor para recuperar '
-          'um PIN esquecido.\n\n'
-          '• Se a biometria estiver ativa, use a digital/rosto para entrar '
-          'e trocar o PIN em Menu → Segurança.\n\n'
-          '• Sem biometria, a saída é desinstalar o app — o que apaga os '
-          'lançamentos. Se você exportou o CSV antes (Menu → Exportar em '
-          'CSV), dá para importar de volta depois.',
-        ),
+        title: Text(s.esqueciPin),
+        content: Text(s.esqueciPinDetalhe),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Entendi'),
+            child: Text(s.entendi),
           ),
         ],
       ),
@@ -148,6 +142,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     // A cor de fundo do perfil já está no tema do MaterialApp; daqui só sai
     // o tom legível para o texto e os ícones.
     final onCor = onBackgroundColor(Theme.of(context).scaffoldBackgroundColor);
+    final s = context.strings;
 
     // A espera por tentativas vem do provedor e o tempo que falta é medido no
     // relógio do app (o mesmo que os testes controlam).
@@ -168,7 +163,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                 Icon(Icons.lock_outline, size: 64, color: onCor),
                 const SizedBox(height: 16),
                 Text(
-                  'Mango bloqueado',
+                  s.mangoBloqueado,
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -195,7 +190,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                 TextButton(
                   onPressed: _esqueciMeuPin,
                   child: Text(
-                    'Esqueci meu PIN',
+                    s.esqueciPin,
                     style: TextStyle(color: onCor.withValues(alpha: 0.8)),
                   ),
                 ),
@@ -211,7 +206,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   /// mensagem de erro — durante a espera, o erro é justamente o motivo dela.
   String _mensagem(Duration restante) {
     if (restante > Duration.zero) {
-      return 'Muitas tentativas. Tente de novo em ${_tempoLegivel(restante)}';
+      return context.strings.tempoEspera(_tempoLegivel(restante));
     }
     return _erro ?? '';
   }
@@ -220,10 +215,13 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   String _tempoLegivel(Duration restante) {
     // Arredonda para cima: com 29,2 s restantes ainda é "30 s" na tela.
     final segundos = (restante.inMilliseconds / 1000).ceil();
-    if (segundos < 60) return '$segundos s';
+    final s = context.strings;
+    if (segundos < 60) return s.tempoSegundos(segundos);
     final minutos = segundos ~/ 60;
     final sobra = segundos % 60;
-    return sobra == 0 ? '$minutos min' : '$minutos min $sobra s';
+    return sobra == 0
+        ? s.tempoMinutos(minutos)
+        : s.tempoMinutosSegundos(minutos, sobra);
   }
 
   /// Enquanto a espera estiver ligada, um tique por segundo redesenha a
@@ -271,6 +269,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   /// entra em cena e o valor não passa por clipboard/histórico. Durante a
   /// espera por tentativas ([travado]), todas as teclas ficam sem toque.
   Widget _teclado(Color onCor, bool travado) {
+    final s = context.strings;
     return SizedBox(
       width: 288,
       child: GridView.count(
@@ -289,7 +288,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
               onCor,
               _tentarBiometria,
               chave: 'biometria',
-              tooltip: 'Usar biometria',
+              tooltip: s.usarBiometriaAcao,
               habilitado: !travado,
             )
           else
@@ -300,7 +299,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
             onCor,
             _apagar,
             chave: 'apagar',
-            tooltip: 'Apagar',
+            tooltip: s.apagar,
             habilitado: !travado,
           ),
         ],
