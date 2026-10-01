@@ -36,3 +36,14 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+
+      # docs/PRIVACIDADE.md é a cópia publicada no GitHub Pages (só ganha o
+      # front matter). Se as duas divergirem, a página pública mente sobre o
+      # app — então o corpo tem que bater com o original, byte a byte.
+      - name: Política publicada = política do repositório
+        run: |
+          diff -u PRIVACIDADE.md <(tail -n +5 docs/PRIVACIDADE.md) || {
+            echo "::error::docs/PRIVACIDADE.md divergiu de PRIVACIDADE.md — sincronize as duas."
+            exit 1
+          }
+

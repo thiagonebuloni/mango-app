@@ -21,8 +21,22 @@ fica na **[wiki do projeto](https://github.com/thiagonebuloni/mango-app/wiki)**:
 - [Backup e privacidade](https://github.com/thiagonebuloni/mango-app/wiki/Backup-e-privacidade)
   — CSV, onde cada dado mora e o que sai (ou não) do aparelho.
 
-As páginas de desenvolvedor (arquitetura, modelo de dados, parser de cupom,
-internacionalização, testes e CI) estão **em construção** na wiki.
+As páginas de desenvolvedor e de mantenedor também estão na wiki:
+[Arquitetura](https://github.com/thiagonebuloni/mango-app/wiki/Arquitetura),
+[Modelo de dados](https://github.com/thiagonebuloni/mango-app/wiki/Modelo-de-dados),
+[Parser de cupom](https://github.com/thiagonebuloni/mango-app/wiki/Parser-de-cupom),
+[Internacionalização](https://github.com/thiagonebuloni/mango-app/wiki/Internacionalização),
+[Segurança do app](https://github.com/thiagonebuloni/mango-app/wiki/Segurança-do-app),
+[Testes](https://github.com/thiagonebuloni/mango-app/wiki/Testes),
+[CI e release](https://github.com/thiagonebuloni/mango-app/wiki/CI-e-release),
+[Estrutura e convenções](https://github.com/thiagonebuloni/mango-app/wiki/Estrutura-e-convenções),
+[Solução de problemas](https://github.com/thiagonebuloni/mango-app/wiki/Solução-de-problemas),
+[Roadmap e status](https://github.com/thiagonebuloni/mango-app/wiki/Roadmap-e-status),
+[Decisões de arquitetura](https://github.com/thiagonebuloni/mango-app/wiki/Decisões-de-arquitetura) e
+[Como contribuir](https://github.com/thiagonebuloni/mango-app/wiki/Como-contribuir).
+
+Também há um **[site estático](https://thiagonebuloni.github.io/mango-app/)** com
+a landing e a política de privacidade publicada — é a URL que vai no Play Console.
 
 
 ## Como funciona (custo R$ 0)
@@ -345,9 +359,10 @@ recusa um APK assinado com chave diferente da instalada).
 ## Licença e privacidade
 
 - Código sob a licença **MIT** — veja [`LICENSE`](LICENSE).
-- **Política de privacidade:** [`PRIVACIDADE.md`](PRIVACIDADE.md). O Play
-  Console exige uma URL pública: a forma mais simples é publicar esse arquivo
-  como página (GitHub Pages deste repositório) e colar a URL no cadastro do app.
+- **Política de privacidade:** [`PRIVACIDADE.md`](PRIVACIDADE.md), publicada em
+  <https://thiagonebuloni.github.io/mango-app/privacidade/> (GitHub Pages deste
+  repositório, fonte em `docs/`) — é a URL para colar no cadastro do app do Play
+  Console.
 - Não há coleta de dados, analytics ou anúncios — o APK de release não tem nem
   permissão de rede, o que responde "nenhum dado coletado" no formulário de
   *Segurança dos dados* do Play.

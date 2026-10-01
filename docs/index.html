@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mango — controle de gastos offline</title>
+  <meta name="description" content="Site oficial do Mango: política de privacidade, código-fonte, wiki e downloads.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥭</text></svg>">
+  <style>
+    :root {
+      --laranja: #FF9E1F;
+      --amarelo: #FFD140;
+      --fundo: #0d0f0f;
+      --caixa: #1a1d1d;
+      --texto: #e8eaea;
+      --suave: #9aa3a3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--fundo);
+      color: var(--texto);
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, var(--laranja), var(--amarelo));
+      color: #1a1200;
+      padding: 3rem 1.25rem 2.5rem;
+      text-align: center;
+    }
+    header .emoji { font-size: 3.5rem; display: block; }
+    header h1 { margin: .4rem 0 .2rem; font-size: 2.2rem; letter-spacing: .02em; }
+    header p { margin: 0; font-weight: 600; opacity: .85; }
+    main { max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    .destaque {
+      background: var(--caixa);
+      border: 1px solid #2c3131;
+      border-left: 4px solid var(--laranja);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .destaque h2 { margin: 0 0 .5rem; font-size: 1.15rem; }
+    .destaque p { margin: 0 0 1rem; color: var(--suave); font-size: .95rem; }
+    .botao {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--laranja), var(--amarelo));
+      color: #1a1200;
+      font-weight: 700;
+      text-decoration: none;
+      padding: .7rem 1.4rem;
+      border-radius: 8px;
+    }
+    .botao:hover { filter: brightness(1.06); }
+    ul.links { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+    ul.links a {
+      display: block;
+      background: var(--caixa);
+      border: 1px solid #2c3131;
+      border-radius: 10px;
+      padding: .9rem 1.1rem;
+      color: var(--texto);
+      text-decoration: none;
+    }
+    ul.links a:hover { border-color: var(--laranja); }
+    ul.links strong { color: var(--amarelo); }
+    ul.links span { display: block; color: var(--suave); font-size: .88rem; margin-top: .15rem; }
+    footer {
+      text-align: center;
+      color: var(--suave);
+      font-size: .85rem;
+      padding: 1.5rem 1rem 2.5rem;
+      border-top: 1px solid #2c3131;
+      margin-top: 2rem;
+    }
+    footer a { color: var(--amarelo); }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="emoji" aria-hidden="true">🥭</span>
+    <h1>Mango</h1>
+    <p>Controle de gastos pessoais — 100% offline</p>
+  </header>
+
+  <main>
+    <section class="destaque">
+      <h2>🔒 Política de privacidade</h2>
+      <p>Nenhum dado sai do seu aparelho: sem servidor, sem conta, sem analytics e
+      sem permissão de internet. A política completa, em linguagem direta:</p>
+      <a class="botao" href="privacidade/">Ler a política de privacidade</a>
+    </section>
+
+    <ul class="links">
+      <li>
+        <a href="https://github.com/thiagonebuloni/mango-app/wiki">
+          <strong>Wiki — documentação</strong>
+          <span>Guia de uso, backup, arquitetura, testes, como contribuir…</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/thiagonebuloni/mango-app/releases">
+          <strong>Downloads (APK)</strong>
+          <span>Releases com APK assinado, notas e SHA-256</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/thiagonebuloni/mango-app">
+          <strong>Código-fonte</strong>
+          <span>Repositório no GitHub — licença MIT</span>
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/thiagonebuloni/mango-app/wiki/Guia-de-uso">
+          <strong>Guia de uso</strong>
+          <span>Cupom, parcelas, categorias, relatórios e bloqueio</span>
+        </a>
+      </li>
+    </ul>
+  </main>
+
+  <footer>
+    Mango é código aberto (MIT) e não coleta nenhum dado.
+    Contato: <a href="https://github.com/thiagonebuloni/mango-app/issues">issues no GitHub</a>.
+  </footer>
+</body>
+</html>
