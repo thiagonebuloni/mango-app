@@ -324,7 +324,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Row(
                       children: [
                         _SummaryCard(
-                          label: 'Dia',
+                          label: s.dia,
                           value: diaTotal,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.dia,
@@ -333,7 +333,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(width: 8),
                         _SummaryCard(
-                          label: 'Semana',
+                          label: s.semana,
                           value: semanaTotal,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.semana,
@@ -342,7 +342,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(width: 8),
                         _SummaryCard(
-                          label: 'Mês',
+                          label: s.mes,
                           value: mesTotal,
                           flex: 1,
                           selected: _filtro == _FiltroRapido.mes,

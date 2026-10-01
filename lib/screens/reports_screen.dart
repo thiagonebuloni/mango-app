@@ -351,8 +351,9 @@ class _BalanceBarCard extends StatelessWidget {
                           final centavos = group.x.toInt() == 0
                               ? totalDespesas
                               : totalReceitas;
-                          final label =
-                              group.x.toInt() == 0 ? 'Despesas' : 'Receitas';
+                          final label = group.x.toInt() == 0
+                              ? s.despesas
+                              : s.receitas;
                           return BarTooltipItem(
                             '$label\n${formatBRL(centavos)}',
                             TextStyle(
@@ -415,7 +416,7 @@ class _BalanceBarCard extends StatelessWidget {
               children: [
                 _BalanceLegend(
                   color: despesaColor,
-                  label: 'Despesas',
+                  label: s.despesas,
                   value: formatBRL(totalDespesas),
                   textColor:
                       (onCard ?? theme.textTheme.bodyMedium?.color)?.withValues(
@@ -424,7 +425,7 @@ class _BalanceBarCard extends StatelessWidget {
                 ),
                 _BalanceLegend(
                   color: receitaColor,
-                  label: 'Receitas',
+                  label: s.receitas,
                   value: formatBRL(totalReceitas),
                   textColor:
                       (onCard ?? theme.textTheme.bodyMedium?.color)?.withValues(

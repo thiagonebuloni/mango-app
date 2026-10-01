@@ -120,7 +120,7 @@ class EnUsStrings extends AppStrings {
   @override String get periodoCustom => 'Custom';
   @override String get semDados => 'No data to display.';
   @override String get despesasXReceitas => 'Expenses vs Income';
-  @override String get totalPeriodo => 'Period total';
+  @override String get totalPeriodo => 'Total period';
   @override String get saldo => 'Balance';
   @override String get despesas => 'Expenses';
   @override String get receitas => 'Income';
@@ -279,7 +279,7 @@ class EnUsStrings extends AppStrings {
   @override String get sobre => 'About Mango';
   @override String get sobreTexto => 'Expense tracker with OCR, 100% offline.';
   @override String backupCom(int n, String? nome) => nome == null ? 'Backup with $n Mango entries.' : 'Backup with $n entries from $nome.';
-  @override String get backupAviso => 'The .csv is plain text, no password. Keep it safe.';
+  @override String get backupAviso => 'The .csv is not encrypted, keep it in a safe place';
   @override String get backupVazio => 'No entries to export.';
   @override String backupExportado(String n) => 'Backup saved as $n';
   @override String falhaExportar(String e) => 'Could not export: $e';

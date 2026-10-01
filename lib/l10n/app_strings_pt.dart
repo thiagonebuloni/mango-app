@@ -280,7 +280,7 @@ class PtBrStrings extends AppStrings {
   @override String get sobre => 'Sobre o Mango';
   @override String get sobreTexto => 'Controle de gastos com OCR, 100% offline.';
   @override String backupCom(int n, String? nome) => nome == null ? 'Backup com $n lançamento(s) do Mango.' : 'Backup com $n lançamento(s) de $nome.';
-  @override String get backupAviso => 'O .csv é texto puro, sem senha. Guarde em local seguro.';
+  @override String get backupAviso => 'O .csv não é criptografado, guarde em local seguro.';
   @override String get backupVazio => 'Não há lançamentos para exportar.';
   @override String backupExportado(String n) => 'Backup salvo como $n';
   @override String falhaExportar(String e) => 'Não foi possível exportar: $e';
