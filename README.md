@@ -9,6 +9,22 @@ total **diário, semanal e mensal**. Cada gasto pode ser digitado manualmente ou
 preenchido automaticamente a partir da **foto de um cupom fiscal** (OCR on-device).
 
 
+## Documentação
+
+Este README cobre o essencial — instalar, rodar, testar e publicar. O detalhe
+fica na **[wiki do projeto](https://github.com/thiagonebuloni/mango-app/wiki)**:
+
+- [Instalação e atualização](https://github.com/thiagonebuloni/mango-app/wiki/Instalação-e-atualização)
+  — APK, o caso do "Segundo espaço", assinatura e troca de chave;
+- [Guia de uso](https://github.com/thiagonebuloni/mango-app/wiki/Guia-de-uso)
+  — cupom, parcelas, categorias, relatórios e bloqueio;
+- [Backup e privacidade](https://github.com/thiagonebuloni/mango-app/wiki/Backup-e-privacidade)
+  — CSV, onde cada dado mora e o que sai (ou não) do aparelho.
+
+As páginas de desenvolvedor (arquitetura, modelo de dados, parser de cupom,
+internacionalização, testes e CI) estão **em construção** na wiki.
+
+
 ## Como funciona (custo R$ 0)
 
 - **OCR:** Google ML Kit Text Recognition v2, rodando **no próprio aparelho**
