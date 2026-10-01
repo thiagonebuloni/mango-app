@@ -157,10 +157,12 @@ class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
   }
 
   Future<void> _alternarBiometria(bool valor) async {
+    // Frases capturadas antes do await: o context não cruza gap assíncrono.
+    final s = context.strings;
     try {
       await ref.read(segurancaProvider.notifier).setBiometria(valor);
     } catch (e) {
-      _avisar(_mensagemErro(e, context.strings));
+      _avisar(_mensagemErro(e, s));
     }
   }
 
@@ -207,7 +209,7 @@ class _SegurancaScreenState extends ConsumerState<SegurancaScreen> {
       await ref.read(segurancaProvider.notifier).setBiometria(true);
       _avisar(s.biometriaAtivada);
     } catch (e) {
-      _avisar(_mensagemErro(e, context.strings));
+      _avisar(_mensagemErro(e, s));
     }
   }
 

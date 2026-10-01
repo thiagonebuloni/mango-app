@@ -97,8 +97,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(DatePickerDialog), findsOneWidget);
 
-      // Escolhe o dia 15 do mês atual (sempre dentro de firstDate..lastDate).
-      await tester.tap(find.text('15').first);
+      // Escolhe um dia do mês sempre habilitado: o seletor limita a data a
+      // hoje + 1 dia, então o dia 15 fica desabilitado nos primeiros dias do
+      // mês e o toque não muda nada (teste quebrava do dia 1 ao 14).
+      final hoje = DateTime.now();
+      final dia = hoje.day == 1 ? 2 : 1;
+      await tester.tap(find.text('$dia').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
@@ -110,10 +114,10 @@ void main() {
 
       final depois = dataExibida();
       final agora = DateTime.now();
-      final prefixo =
-          '15/${agora.month.toString().padLeft(2, '0')}/${agora.year}';
+      final prefixo = '${dia.toString().padLeft(2, '0')}/'
+          '${agora.month.toString().padLeft(2, '0')}/${agora.year}';
       expect(depois, startsWith(prefixo),
-          reason: 'a data deve ter mudado para o dia 15');
+          reason: 'a data deve ter mudado para o dia $dia');
       expect(depois.substring(11), antes.substring(11),
           reason: 'cancelar o seletor de hora deve manter hora/minuto '
               'originais, não zerar em 12:00 (B5)');

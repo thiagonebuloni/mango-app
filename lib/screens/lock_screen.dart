@@ -55,12 +55,14 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   }
 
   Future<void> _tentarBiometria() async {
+    // Frase capturada antes do await: o context não cruza gap assíncrono.
+    final mensagem = context.strings.desbloqueioMango;
     // A espera por tentativas vale para a biometria também: senão bastaria
     // errar o PIN cinco vezes e usar a digital para furar a trava.
     if (await _travadoAgora()) return;
     final ok = await ref
         .read(autenticadorBiometricoProvider)
-        .autenticar(context.strings.desbloqueioMango);
+        .autenticar(mensagem);
     if (!mounted || !ok) return; // cancelou/erro: fica no PIN
     // O diálogo do sistema pode ter demorado: confere a espera de novo.
     if (await _travadoAgora()) return;

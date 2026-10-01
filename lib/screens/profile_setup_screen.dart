@@ -323,6 +323,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   /// (posicionamento + recorte).
   Future<void> _escolherFoto(ImageSource origem) async {
     if (_escolhendoFoto) return;
+    // Frases capturadas antes dos awaits: o context não cruza gap assíncrono.
+    final s = context.strings;
     setState(() => _escolhendoFoto = true);
     try {
       final picked = await ImagePicker().pickImage(
@@ -334,7 +336,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       if (picked == null || !mounted) return;
       // Recusa antes de decodificar (mesma proteção do cupom fiscal).
       final tamanho = await File(picked.path).length();
-      final erro = validarTamanhoAvatar(tamanho, context.strings);
+      final erro = validarTamanhoAvatar(tamanho, s);
       if (!mounted) return;
       if (erro != null) {
         ScaffoldMessenger.of(context)
@@ -361,7 +363,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.imagemInvalida('$e'))),
+        SnackBar(content: Text(s.imagemInvalida('$e'))),
       );
     } finally {
       if (mounted) setState(() => _escolhendoFoto = false);

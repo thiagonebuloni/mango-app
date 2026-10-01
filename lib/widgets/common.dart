@@ -476,6 +476,8 @@ Future<String> lerBackupCsv(Stream<List<int>> bytes) async {
 /// ([CsvBackup.csvAviso]), para quem abri-lo depois.
 Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
+  // Frases capturadas antes dos awaits: o context não cruza gap assíncrono.
+  final s = context.strings;
   if (!await _confirmarExportacao(context)) return;
   if (!context.mounted) return;
   try {
@@ -491,17 +493,16 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
       ShareParams(
         files: [XFile(file.path, mimeType: 'text/csv')],
         title: 'Backup Mango',
-        text: context.strings.backupCom(expenses.length, perfil?.nome),
+        text: s.backupCom(expenses.length, perfil?.nome),
       ),
     );
     messenger.showSnackBar(
       SnackBar(
-        content: Text(context.strings.backupAviso),
+        content: Text(s.backupAviso),
       ),
     );
   } catch (e) {
-    messenger.showSnackBar(
-        SnackBar(content: Text(context.strings.falhaExportar('$e'))));
+    messenger.showSnackBar(SnackBar(content: Text(s.falhaExportar('$e'))));
   }
 }
 
@@ -532,16 +533,18 @@ Future<bool> _confirmarExportacao(BuildContext context) async {
 /// Escolhe um CSV e agrega os lançamentos ao app, sem apagar nada.
 Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
+  // Frases capturadas antes dos awaits: o context não cruza gap assíncrono.
+  final s = context.strings;
   List<PlatformFile> files;
   try {
     files = await FilePicker.pickFiles(
-      dialogTitle: context.strings.importarBackup,
+      dialogTitle: s.importarBackup,
       type: FileType.custom,
       allowedExtensions: const ['csv'],
     );
   } catch (e) {
     messenger.showSnackBar(
-      SnackBar(content: Text(context.strings.erroAbrirSeletor('$e'))),
+      SnackBar(content: Text(s.erroAbrirSeletor('$e'))),
     );
     return;
   }
@@ -565,7 +568,7 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     return;
   } catch (e) {
     messenger.showSnackBar(
-      SnackBar(content: Text(context.strings.erroLerArquivo('$e'))),
+      SnackBar(content: Text(s.erroLerArquivo('$e'))),
     );
     return;
   }
@@ -579,40 +582,34 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   if (result.expenses.isEmpty && result.perfil == null) {
     messenger.showSnackBar(
       SnackBar(
-        content: Text(context.strings.nenhumLancamentoArquivo),
+        content: Text(s.nenhumLancamentoArquivo),
       ),
     );
     return;
   }
   if (!context.mounted) return;
-  final tema = result.perfil!.temaClaro
-      ? context.strings.temaClaro
-      : context.strings.temaEscuro;
+  final tema = result.perfil!.temaClaro ? s.temaClaro : s.temaEscuro;
   final perfilMsg = result.perfil == null
       ? ''
-      : context.strings
-          .perfilTambemRestaurado(result.perfil!.nome, tema);
+      : s.perfilTambemRestaurado(result.perfil!.nome, tema);
   final confirmado = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text(context.strings.importarBackupTitulo),
-      content: Text(context.strings
-          .importarBackupMsg(result.expenses.length, perfilMsg)),
+      title: Text(s.importarBackupTitulo),
+      content: Text(s.importarBackupMsg(result.expenses.length, perfilMsg)),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: Text(context.strings.nao),
+          child: Text(s.nao),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: Text(context.strings.importar),
+          child: Text(s.importar),
         ),
       ],
     ),
   );
   if (confirmado != true) return;
-  // Frases capturadas antes dos awaits (context não cruza gap assíncrono).
-  final s = context.strings;
   if (result.perfil != null) {
     await ref.read(profileProvider.notifier).save(result.perfil!);
   }
