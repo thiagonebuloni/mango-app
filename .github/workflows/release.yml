@@ -30,11 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      # Actions todas em major com Node 24 (o Node 20 saiu dos runners em
+      # 23/09/2026; majors antigos são forçados ao Node 24 e emitem aviso):
+      # checkout v7, setup-java v6 e upload-artifact v7.
+      - uses: actions/checkout@v7
 
       # Java 17: o projeto compila com source/targetCompatibility 17; o cache
       # do Gradle corta o download das dependências Android no primeiro run.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -179,7 +182,7 @@ jobs:
             -q '"Release publicada: \(.url) — " + ([.assets[].name] | join(", "))'
 
       # Toda execução (tag ou ensaio) guarda o APK como artefato.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mango-${{ env.VER }}
           path: ${{ runner.temp }}/mango-${{ env.VER }}.apk

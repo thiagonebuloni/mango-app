@@ -18,7 +18,11 @@ jobs:
     name: analyze + test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # checkout v7: o Node 20 foi removido dos runners em 23/09/2026 e as
+      # actions que ainda declaram node20 passaram a ser executadas "à força"
+      # no Node 24 — funciona, mas gera aviso a cada run e roda um runtime
+      # para o qual a action não foi testada.
+      - uses: actions/checkout@v7
 
       # Versão fixada na mesma do README (testado com 3.47.5 / Dart 3.13):
       # subir de versão é uma decisão consciente, não efeito colateral de um
