@@ -151,6 +151,11 @@ abstract class AppStrings {
   String get ajustePerfil;
   String get vamosCriarPerfil;
   String get escolhaAvatar;
+  String get avatar;
+  String get usarFoto;
+  String get trocarFotoCurto;
+  String get semEmojisRecentes;
+  String get buscarEmoji;
   String get toqueTrocarAvatar;
   String get nomeUsuario;
   String get informeNome;
@@ -169,6 +174,7 @@ abstract class AppStrings {
   String get descartarSair;
   String get trocarFoto;
   String get escolherEmoji;
+  String get escolhaEmoji;
   String get fotoGaleria;
   String get gradeEmojis;
   String get arrastarRecorte;

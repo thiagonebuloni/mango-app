@@ -133,6 +133,11 @@ class EnUsStrings extends AppStrings {
   @override String get ajustePerfil => 'Adjust your name, avatar and background color.';
   @override String get vamosCriarPerfil => 'Create your profile to personalize the app.';
   @override String get escolhaAvatar => 'Choose your avatar';
+  @override String get avatar => 'Avatar';
+  @override String get usarFoto => 'Use photo';
+  @override String get trocarFotoCurto => 'Change photo';
+  @override String get semEmojisRecentes => 'No recent emojis';
+  @override String get buscarEmoji => 'Search emoji';
   @override String get toqueTrocarAvatar => 'Tap to change the avatar';
   @override String get nomeUsuario => 'User name';
   @override String get informeNome => 'Enter your name';
@@ -151,6 +156,7 @@ class EnUsStrings extends AppStrings {
   @override String get descartarSair => 'Discard & leave';
   @override String get trocarFoto => 'Change avatar photo';
   @override String get escolherEmoji => 'Pick an emoji';
+  @override String get escolhaEmoji => 'Pick an emoji';
   @override String get fotoGaleria => 'Photo from gallery';
   @override String get gradeEmojis => 'Grid with every emoji';
   @override String get arrastarRecorte => 'Drag to position, zoom below';

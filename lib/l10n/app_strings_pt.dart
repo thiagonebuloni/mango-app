@@ -133,6 +133,11 @@ class PtBrStrings extends AppStrings {
   @override String get ajustePerfil => 'Ajuste seu nome, avatar e cor de fundo.';
   @override String get vamosCriarPerfil => 'Vamos criar seu perfil para personalizar o app.';
   @override String get escolhaAvatar => 'Escolha seu avatar';
+  @override String get avatar => 'Avatar';
+  @override String get usarFoto => 'Usar foto';
+  @override String get trocarFotoCurto => 'Trocar foto';
+  @override String get semEmojisRecentes => 'Sem emojis recentes';
+  @override String get buscarEmoji => 'Buscar emoji';
   @override String get toqueTrocarAvatar => 'Toque para trocar o avatar';
   @override String get nomeUsuario => 'Nome do usuário';
   @override String get informeNome => 'Informe seu nome';
@@ -151,6 +156,7 @@ class PtBrStrings extends AppStrings {
   @override String get descartarSair => 'Descartar e sair';
   @override String get trocarFoto => 'Trocar foto do avatar';
   @override String get escolherEmoji => 'Escolher emoticon';
+  @override String get escolhaEmoji => 'Escolha um emoji';
   @override String get fotoGaleria => 'Foto da galeria';
   @override String get gradeEmojis => 'Grade com todos os emojis';
   @override String get arrastarRecorte => 'Arrastar para posicionar, zoom abaixo';

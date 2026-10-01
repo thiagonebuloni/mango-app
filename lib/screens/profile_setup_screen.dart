@@ -468,7 +468,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           backgroundColor: fundoPrevia,
           appBar: _isEdit
               ? AppBar(
-                  title: const Text('Editar perfil'),
+                  title: Text(context.strings.editarPerfil),
                   backgroundColor: Colors.transparent,
                   foregroundColor: onCor,
                 )
@@ -603,7 +603,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Escolha seu avatar',
+            context.strings.escolhaAvatar,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -676,7 +676,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         ),
         border: const OutlineInputBorder(),
       ),
-      validator: (v) => (v ?? '').trim().isEmpty ? 'Informe seu nome' : null,
+      validator: (v) =>
+          (v ?? '').trim().isEmpty ? context.strings.informeNome : null,
       onFieldSubmitted: (_) => _salvar(),
     ),
   );
@@ -684,7 +685,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Widget _escolhaAvatar(Color onCor) => Column(
     children: [
       Text(
-        'Avatar',
+        context.strings.avatar,
         style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
       ),
       const SizedBox(height: 12),
@@ -714,13 +715,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             TextButton.icon(
               onPressed: _escolherEmojiDaGrade,
               icon: const Icon(Icons.emoji_emotions_outlined),
-              label: const Text('Outro emoji'),
+              label: Text(context.strings.outroEmoji),
             ),
             TextButton.icon(
               onPressed: _menuAvatar,
               icon: const Icon(Icons.image_outlined),
               label: Text(
-                _fotoPath == null ? 'Usar foto' : 'Trocar foto',
+                _fotoPath == null
+                    ? context.strings.usarFoto
+                    : context.strings.trocarFotoCurto,
               ),
             ),
           ],
@@ -778,7 +781,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Tema',
+            context.strings.tema,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -799,7 +802,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   child: _TemaOption(
                     key: const ValueKey('tema-claro'),
                     icon: Icons.wb_sunny_outlined,
-                    label: 'Claro',
+                    label: context.strings.claro,
                     selected: isClaro,
                     temaClaro: isClaro,
                     cor: _cor,
@@ -811,7 +814,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   child: _TemaOption(
                     key: const ValueKey('tema-escuro'),
                     icon: Icons.dark_mode_outlined,
-                    label: 'Escuro',
+                    label: context.strings.escuro,
                     selected: !isClaro,
                     temaClaro: isClaro,
                     cor: _cor,
@@ -829,7 +832,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Widget _escolhaCor(Color onCor) => Column(
     children: [
       Text(
-        'Cor de fundo',
+        context.strings.corFundo,
         style: TextStyle(fontWeight: FontWeight.bold, color: onCor),
       ),
       const SizedBox(height: 8),
@@ -1111,7 +1114,7 @@ class _AjusteFotoSheetState extends State<_AjusteFotoSheet> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancelar'),
+                      child: Text(context.strings.cancelar),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1120,7 +1123,7 @@ class _AjusteFotoSheetState extends State<_AjusteFotoSheet> {
                       onPressed: () => Navigator.of(context).pop(
                         _AjusteFoto(_ax, _ay, _zoom),
                       ),
-                      child: const Text('Aplicar'),
+                      child: Text(context.strings.aplicar),
                     ),
                   ),
                 ],
@@ -1237,7 +1240,7 @@ class _EmojiSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
                 child: Text(
-                  'Escolha um emoji',
+                  context.strings.escolhaEmoji,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -1247,22 +1250,24 @@ class _EmojiSheet extends StatelessWidget {
                 child: EmojiPicker(
                   onEmojiSelected: (category, emoji) =>
                       Navigator.of(context).pop(emoji.emoji),
-                  config: const Config(
+                  // Busca e rótulos no idioma do app: "unicórnio" em pt-BR,
+                  // "unicorn" em en-US.
+                  config: Config(
                     checkPlatformCompatibility: true,
-                    // App em pt-BR: busca em português ("unicórnio" em vez de
-                    // "unicorn").
-                    locale: Locale('pt'),
+                    locale: Locale(
+                      Localizations.localeOf(context).languageCode,
+                    ),
                     emojiViewConfig: EmojiViewConfig(
                       columns: 8,
                       emojiSizeMax: 28,
                       noRecents: Text(
-                        'Sem emojis recentes',
-                        style: TextStyle(fontSize: 14),
+                        context.strings.semEmojisRecentes,
+                        style: const TextStyle(fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
                     ),
                     searchViewConfig: SearchViewConfig(
-                      hintText: 'Buscar emoji',
+                      hintText: context.strings.buscarEmoji,
                     ),
                   ),
                 ),
