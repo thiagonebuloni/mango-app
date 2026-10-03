@@ -346,6 +346,7 @@ class EnUsStrings extends AppStrings {
       case 'alimentacao': return 'Dining';
       case 'transporte': return 'Transport';
       case 'mercado': return 'Groceries';
+      case 'vestuario': return 'Clothing';
       case 'saude': return 'Health';
       case 'lazer': return 'Leisure';
       case 'moradia': return 'Housing';

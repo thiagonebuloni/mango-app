@@ -132,6 +132,8 @@ extension CategoryVisual on Category {
         return Icons.directions_car;
       case Category.mercado:
         return Icons.shopping_cart;
+      case Category.vestuario:
+        return Icons.checkroom;
       case Category.saude:
         return Icons.local_pharmacy;
       case Category.lazer:
@@ -165,6 +167,8 @@ extension CategoryVisual on Category {
         return const Color(0xFF3B82F6);
       case Category.mercado:
         return const Color(0xFF10B981);
+      case Category.vestuario:
+        return const Color(0xFF8D6E63);
       case Category.saude:
         return const Color(0xFFEF4444);
       case Category.lazer:

@@ -220,6 +220,11 @@ VALOR TOTAL R\$ 12,00
           Category.mercado);
     });
 
+    test('loja de roupas → vestuário', () {
+      expect(c.guessByKeywords(text: 'LOJA DE ROUPAS E CALCADOS'),
+          Category.vestuario);
+    });
+
     test('posto → transporte', () {
       expect(c.guessByKeywords(text: 'POSTO SHELL COMBUSTIVEL'),
           Category.transporte);

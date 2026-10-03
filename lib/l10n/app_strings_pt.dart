@@ -347,6 +347,7 @@ class PtBrStrings extends AppStrings {
       case 'alimentacao': return 'Alimentação';
       case 'transporte': return 'Transporte';
       case 'mercado': return 'Mercado';
+      case 'vestuario': return 'Vestuário';
       case 'saude': return 'Saúde';
       case 'lazer': return 'Lazer';
       case 'moradia': return 'Moradia';

@@ -46,6 +46,11 @@ class Categorizer {
 
     // A ordem dos grupos importa (específicos primeiro).
     const rules = <Category, List<String>>{
+      Category.vestuario: [
+        'vestuario', 'vestuário', 'roupa', 'calcado', 'calçado', 'sapato',
+        'tenis', 'tênis', 'camisa', 'camiseta', 'calca', 'calça', 'blusa',
+        'boutique', 'renner', 'riachuelo', 'zara', 'shein', 'hering',
+      ],
       Category.mercado: [
         'supermercado', 'mercado', 'atacad', 'hortifruti', 'acougue',
         'açougue', 'assai', 'assaí', 'atacarejo', 'carrefour',

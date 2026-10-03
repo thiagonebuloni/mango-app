@@ -80,6 +80,8 @@ void main() {
     test('rótulos de categoria e pagamento são traduzidos', () {
       expect(AppStrings.of(pt).categoriaLabel('alimentacao'), 'Alimentação');
       expect(AppStrings.of(en).categoriaLabel('alimentacao'), 'Dining');
+      expect(AppStrings.of(pt).categoriaLabel('vestuario'), 'Vestuário');
+      expect(AppStrings.of(en).categoriaLabel('vestuario'), 'Clothing');
       expect(AppStrings.of(pt).pagamentoLabel('dinheiro'), 'Dinheiro');
       expect(AppStrings.of(en).pagamentoLabel('dinheiro'), isNot('Dinheiro'));
     });

@@ -9,6 +9,7 @@ enum Category {
   alimentacao,
   transporte,
   mercado,
+  vestuario,
   saude,
   lazer,
   moradia,
@@ -28,6 +29,7 @@ extension CategoryX on Category {
     Category.alimentacao,
     Category.transporte,
     Category.mercado,
+    Category.vestuario,
     Category.saude,
     Category.lazer,
     Category.moradia,
@@ -60,6 +62,8 @@ extension CategoryX on Category {
         return 'Transporte';
       case Category.mercado:
         return 'Mercado';
+      case Category.vestuario:
+        return 'Vestuário';
       case Category.saude:
         return 'Saúde';
       case Category.lazer:
