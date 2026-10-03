@@ -19,16 +19,21 @@ class HomeScreen extends ConsumerStatefulWidget {
   /// a tela é usada fora dela: o item do menu apenas fecha.
   final VoidCallback? onVerRelatorios;
 
-  const HomeScreen({super.key, this.onVerRelatorios});
+  /// Troca para a aba de Cartões; `null` fora da navegação raiz (aí o item
+  /// de Cartões nem aparece no menu).
+  final VoidCallback? onVerCartoes;
+
+  const HomeScreen({super.key, this.onVerRelatorios, this.onVerCartoes});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  /// Mês em exibição (dia 1). Começa no mês atual; o usuário pode voltar
-  /// para meses anteriores e avançar até o mês atual.
-  late DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  /// Mês em exibição (dia 1). O valor mora em [mesGastosProvider] — fora do
+  /// `State` da tela —, então sobrevive à troca de abas e a sair e voltar, e
+  /// é independente do mês escolhido na tela de Cartões.
+  DateTime get _visibleMonth => ref.read(mesGastosProvider);
 
   /// Filtro rápido ativo (Dia/Semana/Mês). `null` = mostra gastos do mês.
   _FiltroRapido? _filtro;
@@ -37,28 +42,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late int _dialogYear;
   late int _dialogMonth;
 
-  DateTime get _monthStart => DateTime(_visibleMonth.year, _visibleMonth.month);
-  DateTime get _monthEnd =>
-      DateTime(_visibleMonth.year, _visibleMonth.month + 1);
-
   bool get _isCurrentMonth {
+    final mes = _visibleMonth;
     final now = DateTime.now();
-    return _visibleMonth.year == now.year && _visibleMonth.month == now.month;
+    return mes.year == now.year && mes.month == now.month;
+  }
+
+  /// Mostra outro mês na tela e limpa o filtro rápido (que valia para o mês
+  /// anterior).
+  void _irParaMes(DateTime mes) {
+    ref.read(mesGastosProvider.notifier).mostrar(mes);
+    setState(() => _filtro = null);
   }
 
   void _previousMonth() {
-    setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
-      _filtro = null;
-    });
+    final mes = _visibleMonth;
+    _irParaMes(DateTime(mes.year, mes.month - 1));
   }
 
   void _nextMonth() {
     if (_isCurrentMonth) return;
-    setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
-      _filtro = null;
-    });
+    final mes = _visibleMonth;
+    _irParaMes(DateTime(mes.year, mes.month + 1));
   }
 
   /// Seletor de mês em 2 passos (só ano + mês, sem escolher dia):
@@ -162,10 +167,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
     if (month == null || !mounted) return;
-    setState(() {
-      _visibleMonth = DateTime(year, month);
-      _filtro = null;
-    });
+    _irParaMes(DateTime(year, month));
   }
 
   /// Alterna o filtro rápido: tocar num card ativo o desmarca e volta a
@@ -231,6 +233,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Mês guardado no provedor: observá-lo faz a tela reconstruir quando o
+    // período muda (setas, seletor) — inclusive ao voltar para a aba.
+    final mes = ref.watch(mesGastosProvider);
+    final monthStart = DateTime(mes.year, mes.month);
+    final monthEnd = DateTime(mes.year, mes.month + 1);
     final expensesAsync = ref.watch(expensesProvider);
     final destaque = corDestaqueDoPerfil(ref.watch(profileProvider).value);
 
@@ -246,6 +253,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ref,
               abaAtual: AbaPrincipal.gastos,
               onIrParaRelatorios: widget.onVerRelatorios,
+              onIrParaCartoes: widget.onVerCartoes,
             ),
           ),
         ],
@@ -261,8 +269,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final now = DateTime.now();
           // Gastos do mês visível (contexto selecionado nas setas/seletor).
           final monthExpenses = expenses.where((e) {
-            return !e.dataHora.isBefore(_monthStart) &&
-                e.dataHora.isBefore(_monthEnd);
+            return !e.dataHora.isBefore(monthStart) &&
+                e.dataHora.isBefore(monthEnd);
           }).toList();
 
           // Referência para Dia/Semana: "hoje" no mês atual; último dia do
@@ -270,7 +278,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // sempre representam o mês selecionado, e não o mês atual.
           final DateTime refNow = _isCurrentMonth
               ? now
-              : _monthEnd.subtract(const Duration(days: 1));
+              : monthEnd.subtract(const Duration(days: 1));
           final d0 = Periods.startOfDay(refNow);
           final w0 = Periods.startOfWeek(refNow);
 
@@ -306,11 +314,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _FiltroRapido.semana =>
               s.gastosDeSemana(data(w0), data(refNow)),
             _FiltroRapido.mes => s.gastosDeMes(
-                formatDate(_monthStart, (p) => p.monthName, loc)),
+                formatDate(monthStart, (p) => p.monthName, loc)),
             null => null,
           };
           final monthLabel =
-              formatDate(_monthStart, (p) => p.monthYear, loc);
+              formatDate(monthStart, (p) => p.monthYear, loc);
           final monthTitle =
               '${monthLabel[0].toUpperCase()}${monthLabel.substring(1)}';
 

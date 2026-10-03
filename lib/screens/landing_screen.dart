@@ -11,9 +11,9 @@ import 'root_nav.dart';
 /// Largura dos botões principais da tela inicial (centralizados).
 const double kLandingActionWidth = 260;
 
-/// Primeira tela do app: avatar + nome do usuário e as duas abas do app
-/// ("Gastos" e "Relatórios") mais o botão "Menu", tudo centralizado sobre a
-/// cor de fundo escolhida no cadastro.
+/// Primeira tela do app: avatar + nome do usuário, os dois atalhos de abas
+/// ("Gastos" e "Relatórios") e o botão "Menu" — que também oferece a aba de
+/// Cartões —, tudo centralizado sobre a cor de fundo escolhida no cadastro.
 class LandingScreen extends ConsumerWidget {
   const LandingScreen({super.key});
 
@@ -77,6 +77,7 @@ class LandingScreen extends ConsumerWidget {
                       ref,
                       onIrParaGastos: () => _abrirApp(context, 0),
                       onIrParaRelatorios: () => _abrirApp(context, 1),
+                      onIrParaCartoes: () => _abrirApp(context, 2),
                     ),
                     icon: const Icon(Icons.menu),
                     label: Text(s.menu),

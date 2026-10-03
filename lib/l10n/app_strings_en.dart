@@ -295,6 +295,52 @@ class EnUsStrings extends AppStrings {
   @override String get importarBackupTitulo => 'Import backup?';
   @override String importacaoOk(int a, int b, String c) => 'Import: $a new, $b duplicates.$c';
   @override String ignoradasLines(int n) => ' $n line(s) skipped.';
+  @override String cartoesImportados(int n) => ' $n card(s) also restored.';
+  // ---------------- credit cards ----------------
+  @override String get cartoes => 'Cards';
+  @override String get cartoesSub => 'Monthly spending per card';
+  @override String get novoCartao => 'New card';
+  @override String get adicionarCartao => 'Add card';
+  @override String get editarCartao => 'Edit card';
+  @override String get nenhumCartao => 'No cards yet';
+  @override String get nenhumCartaoMsg => 'Add your card (no number or expiry needed) to track its monthly statement.';
+  @override String get banco => 'Bank';
+  @override String get informeBanco => "Enter the card's bank";
+  @override String get bandeira => 'Network';
+  @override String get nomeCartao => 'Card name';
+  @override String get nomeCartaoHint => 'What would you like to call this card';
+  @override String get informeNomeCartao => 'Give the card a name';
+  @override String get diaFechamento => 'Closing day';
+  @override String get diaPagamento => 'Payment day';
+  @override String get diaInvalido => 'Day must be between 1 and 31';
+  @override String get salvarCartao => 'Save card';
+  @override String get cartaoSalvo => 'Card saved';
+  @override String get excluirCartao => 'Delete card?';
+  @override String excluirCartaoMsg(String nome) => 'Delete "$nome"? Spending stays saved, just without a linked card.';
+  @override String get cartaoExcluido => 'Card deleted';
+  @override String get totalFatura => 'Statement total';
+  @override String faturaDe(String mes) => '$mes statement';
+  @override String fechamentoEm(String data) => 'Closes on $data';
+  @override String pagamentoEm(String data) => 'Due on $data';
+  @override String get semGastosCartao => 'No spending this month';
+  @override String get campoCartao => 'Card';
+  @override String get semCartao => 'No card';
+  @override String get fechamentoFatura => 'Statement closes';
+  @override String get pagamentoFatura => 'Payment due';
+  @override String lembreteFechamento(String nome) => 'The statement for card $nome closes today.';
+  @override String lembretePagamento(String nome) => 'Payment for card $nome is due today.';
+  @override String get permissaoNotificacoes => 'Mango can notify you when the statement closes and when payment is due.';
+  @override String bandeiraLabel(String name) {
+    switch (name) {
+      case 'visa': return 'Visa';
+      case 'mastercard': return 'Mastercard';
+      case 'elo': return 'Elo';
+      case 'amex': return 'American Express';
+      case 'hipercard': return 'Hipercard';
+      case 'outras': return 'Other';
+      default: return name;
+    }
+  }
   @override String categoriaLabel(String name) {
     switch (name) {
       case 'alimentacao': return 'Dining';

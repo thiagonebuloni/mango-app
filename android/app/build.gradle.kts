@@ -76,6 +76,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Desugaring: exigido pelo flutter_local_notifications (lembretes
+        // agendados dos cartões) desde a v10 — sem ele o build falha.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -165,4 +168,5 @@ flutter {
 // (mango/ocr em MainActivity.kt) faz o OCR direto, sem plugin.
 dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

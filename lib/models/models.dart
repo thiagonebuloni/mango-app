@@ -160,6 +160,9 @@ class Expense {
   final EntryKind tipo;
   final String? fotoPath; // caminho da foto do cupom (opcional)
   final String? rawText; // texto OCR bruto (opcional)
+  /// Cartão de crédito a que a despesa pertence (`cartoes.id`); `null` =
+  /// lançamento sem cartão vinculado. Só faz sentido com [forma] == crédito.
+  final int? cartaoId;
 
   const Expense({
     this.id,
@@ -173,6 +176,7 @@ class Expense {
     this.tipo = EntryKind.despesa,
     this.fotoPath,
     this.rawText,
+    this.cartaoId,
   });
 
   /// Atalho de leitura: receitas somam, despesas subtraem.
@@ -202,6 +206,11 @@ class Expense {
   /// imune a colisão com o separador `|` usado em [chaveUnica].
   static String _campoComTamanho(String valor) => '${valor.length}:$valor';
 
+  /// Sentinela do [copyWith]: valor que significa "manter o atual", para que
+  /// `cartaoId` consiga ser apagado (`null`) quando a forma deixa de ser
+  /// crédito — `?? this.cartaoId` nunca chegaria lá.
+  static const Object _manter = Object();
+
   Expense copyWith({
     int? id,
     int? valorCentavos,
@@ -214,6 +223,7 @@ class Expense {
     EntryKind? tipo,
     String? fotoPath,
     String? rawText,
+    Object? cartaoId = _manter,
   }) =>
       Expense(
         id: id ?? this.id,
@@ -227,6 +237,8 @@ class Expense {
         tipo: tipo ?? this.tipo,
         fotoPath: fotoPath ?? this.fotoPath,
         rawText: rawText ?? this.rawText,
+        cartaoId:
+            identical(cartaoId, _manter) ? this.cartaoId : cartaoId as int?,
       );
 
   Map<String, Object?> toMap() => {
@@ -241,6 +253,7 @@ class Expense {
         'tipo': tipo.name,
         'foto': fotoPath,
         'raw': rawText,
+        'cartao_id': cartaoId,
       };
 
   static Expense fromMap(Map<String, Object?> map) => Expense(
@@ -261,6 +274,7 @@ class Expense {
         tipo: EntryKindX.fromName(map['tipo'] as String?),
         fotoPath: map['foto'] as String?,
         rawText: map['raw'] as String?,
+        cartaoId: map['cartao_id'] as int?,
       );
 
   @override
@@ -549,3 +563,125 @@ class TentativasBloqueio {
   String toString() => 'TentativasBloqueio(falhas: $falhas, '
       'bloqueadoAte: $bloqueadoAte)';
 }
+
+/// Bandeiras de cartão de crédito oferecidas no cadastro. O nome do enum é o
+/// identificador persistido (coluna `bandeira` de `cartoes`); o rótulo
+/// localizado fica em `AppStrings.bandeiraLabel`.
+enum BandeiraCartao {
+  visa,
+  mastercard,
+  elo,
+  amex,
+  hipercard,
+  outras,
+}
+
+extension BandeiraCartaoX on BandeiraCartao {
+  /// Sigla curta usada no selo do cartão (ex.: `VV`, `MC`). Sem tradução:
+  /// é marca, não frase.
+  String get sigla {
+    switch (this) {
+      case BandeiraCartao.visa:
+        return 'VISA';
+      case BandeiraCartao.mastercard:
+        return 'MC';
+      case BandeiraCartao.elo:
+        return 'elo';
+      case BandeiraCartao.amex:
+        return 'AMEX';
+      case BandeiraCartao.hipercard:
+        return 'HIPER';
+      case BandeiraCartao.outras:
+        return '•••';
+    }
+  }
+
+  static BandeiraCartao fromName(String? name) =>
+      BandeiraCartao.values.firstWhere((b) => b.name == name,
+          orElse: () => BandeiraCartao.outras);
+}
+
+/// Cartão de crédito cadastrado pelo usuário — **nada de dado sensível**:
+/// nem número, nem nome no plástico, nem validade/cvv. Só o suficiente para
+/// separar os gastos do mês e avisar fechamento/pagamento.
+///
+/// [diaFechamento] e [diaPagamento] são dias do mês (1..31); em meses com
+/// menos dias vale o último dia do mês (30/31 em fevereiro vira 28/29).
+class CartaoCredito {
+  final int? id;
+
+  /// Nome do banco/emissor (ex.: "Itaú", "Nubank") — usado também para a
+  /// cor de fundo da arte do cartão.
+  final String banco;
+
+  final BandeiraCartao bandeira;
+
+  /// Nome escolhido pelo usuário para o cartão (ex.: "Personalizar").
+  final String nome;
+
+  /// Dia do fechamento da fatura (1..31).
+  final int diaFechamento;
+
+  /// Dia do vencimento/pagamento da fatura (1..31).
+  final int diaPagamento;
+
+  const CartaoCredito({
+    this.id,
+    required this.banco,
+    required this.bandeira,
+    required this.nome,
+    required this.diaFechamento,
+    required this.diaPagamento,
+  });
+
+  static CartaoCredito fromMap(Map<String, Object?> map) => CartaoCredito(
+        id: map['id'] as int?,
+        banco: map['banco'] as String,
+        bandeira: BandeiraCartaoX.fromName(map['bandeira'] as String?),
+        nome: map['nome'] as String,
+        diaFechamento: map['dia_fechamento'] as int,
+        diaPagamento: map['dia_pagamento'] as int,
+      );
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'banco': banco,
+        'bandeira': bandeira.name,
+        'nome': nome,
+        'dia_fechamento': diaFechamento,
+        'dia_pagamento': diaPagamento,
+      };
+
+  /// Identificador estável do cartão para o backup CSV: o `id` do banco muda
+  /// a cada importação, então o vínculo gasto↔cartão viaja como
+  /// `banco|bandeira|nome`.
+  String get chaveEstavel =>
+      '${_campoTamanho(banco)}|${bandeira.name}|${_campoTamanho(nome)}';
+
+  /// Prefixa um campo de texto com o comprimento: codificação injetiva, imune
+  /// a colisão com o separador `|` (mesma técnica de `Expense.chaveUnica`).
+  static String _campoTamanho(String valor) => '${valor.length}:$valor';
+
+  CartaoCredito copyWith({
+    int? id,
+    String? banco,
+    BandeiraCartao? bandeira,
+    String? nome,
+    int? diaFechamento,
+    int? diaPagamento,
+  }) =>
+      CartaoCredito(
+        id: id ?? this.id,
+        banco: banco ?? this.banco,
+        bandeira: bandeira ?? this.bandeira,
+        nome: nome ?? this.nome,
+        diaFechamento: diaFechamento ?? this.diaFechamento,
+        diaPagamento: diaPagamento ?? this.diaPagamento,
+      );
+
+  @override
+  String toString() =>
+      'CartaoCredito(id: $id, banco: $banco, bandeira: ${bandeira.name}, '
+      'nome: $nome, fechamento: $diaFechamento, pagamento: $diaPagamento)';
+}
+

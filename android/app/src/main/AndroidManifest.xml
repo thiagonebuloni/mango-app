@@ -16,6 +16,12 @@
     <!-- Biometria local (digital/rosto) para o bloqueio do app: a API do
          sistema é quem valida — nenhum dado biométrico passa pelo Mango. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Lembretes de fechamento/pagamento da fatura: notificação local
+         agendada pelo próprio aparelho (sem servidor, sem rede). A permissão
+         de exibição (POST_NOTIFICATIONS, Android 13+) é pedida na hora em que
+         o usuário cadastra o cartão. RECEIVE_BOOT_COMPLETED deixa o plugin
+         reagendar os lembretes depois de reiniciar o aparelho. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Dados do app fora do backup na nuvem: o banco `mango.db` guarda o
          texto bruto de cada cupom (coluna `raw`), que pode conter CPF impresso
          na nota, e o app promete dados 100% locais. O backup oficial é o CSV
@@ -56,6 +62,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Lembretes de cartão (flutter_local_notifications): dispara o
+             aviso na data agendada e o reagenda após reinício do aparelho. -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

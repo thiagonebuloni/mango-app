@@ -17,6 +17,7 @@ import 'package:mango/main.dart';
 import 'package:mango/l10n/app_locale.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/screens/capture_screen.dart';
+import 'package:mango/screens/cartoes_screen.dart';
 import 'package:mango/screens/diagnostico_screen.dart';
 import 'package:mango/screens/expense_form_screen.dart';
 import 'package:mango/screens/home_screen.dart';
@@ -88,6 +89,11 @@ class _FakeReportsNotifier extends ExpensesForReports {
 
   @override
   Future<List<Expense>> build() async => _expenses;
+}
+
+class _FakeCartoesNotifier extends CartoesNotifier {
+  @override
+  Future<List<CartaoCredito>> build() async => const [];
 }
 
 /// Rola a edição de perfil até o botão "Salvar" ficar tocável.
@@ -823,6 +829,7 @@ void main() async {
             expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
             expensesForReportsProvider
                 .overrideWith(() => _FakeReportsNotifier()),
+            cartoesProvider.overrideWith(() => _FakeCartoesNotifier()),
           ],
           child: _makeApp(home: const ProfileGate()),
         ),
@@ -901,6 +908,22 @@ void main() async {
       expect(find.text('Exportar em CSV'), findsOneWidget);
       expect(find.text('Importar em CSV'), findsOneWidget);
       expect(find.text('Sobre o Mango'), findsOneWidget);
+    });
+
+    testWidgets('"Menu" também leva para a tela de Cartões', (tester) async {
+      await abrirTelaInicial(tester);
+
+      await tester.tap(find.text('Menu'));
+      await tester.pumpAndSettle();
+
+      // A landing não tem botão de Cartões: o texto é só o item do menu.
+      expect(find.text('Cartões'), findsOneWidget);
+      await tester.tap(find.text('Cartões'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CartoesScreen), findsOneWidget);
+      // Título do AppBar + navegação inferior.
+      expect(find.text('Cartões'), findsNWidgets(2));
     });
 
     testWidgets('"Sobre o Mango" mostra a versão do próprio app',

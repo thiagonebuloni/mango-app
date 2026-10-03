@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -65,6 +66,54 @@ int? parseMoneyInput(String input) {
     return null;
   }
   return (value * 100).round();
+}
+
+/// Inverso de [parseMoneyInput]: centavos no formato em que o usuário lê e
+/// digita no campo de valor — vírgula decimal, duas casas e **sem** separador
+/// de milhar ("0,00", "12,34", "1234,56").
+String formatMoneyInput(int centavos) {
+  final sinal = centavos < 0 ? '-' : '';
+  final absoluto = centavos.abs();
+  final inteiro = absoluto ~/ 100;
+  final decimais = (absoluto % 100).toString().padLeft(2, '0');
+  return '$sinal$inteiro,$decimais';
+}
+
+/// Máscara do campo de valor: o campo começa em `0,00` e cada dígito digitado
+/// entra pela direita (dos centavos para cima), sem o usuário digitar o
+/// separador — "1" → "0,01", "12" → "0,12", "123" → "1,23".
+///
+/// Ponto e vírgula digitados ou colados são descartados: a vírgula decimal é
+/// colocada pela própria máscara. O teto de centavos é o mesmo de
+/// [parseMoneyInput] (R$ 1 trilhão), para o campo nunca aceitar um valor que
+/// a validação do formulário recusaria.
+class CurrencyInputFormatter extends TextInputFormatter {
+  const CurrencyInputFormatter();
+
+  /// Teto em centavos (1e12 = R$ 1 trilhão), igual ao de [parseMoneyInput].
+  static const int _maxCentavos = 1000000000000;
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    // Só dígitos contam; ponto/vírgula somem antes de reformatar.
+    final digitos = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitos.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+    // Corta antes de converter: string gigante colada não estoura o `int`.
+    final recortado = digitos.length > 13 ? digitos.substring(0, 13) : digitos;
+    final valor = int.parse(recortado);
+    final centavos = valor > _maxCentavos ? _maxCentavos : valor;
+    final texto = formatMoneyInput(centavos);
+    return TextEditingValue(
+      text: texto,
+      selection: TextSelection.collapsed(offset: texto.length),
+    );
+  }
 }
 
 /// Cor de texto/ícone legível sobre [background] (usada nas telas em que o
@@ -306,22 +355,23 @@ class NewExpenseMenu extends StatelessWidget {
 /// Aba da navegação principal em que o menu foi aberto.
 ///
 /// Define qual item de navegação o menu exibe: sempre a aba oposta à atual.
-enum AbaPrincipal { gastos, relatorios, inicial }
+enum AbaPrincipal { gastos, relatorios, cartoes, inicial }
 
 /// Menu compartilhado do app: tela inicial (botão "Menu") e o ícone de menu
-/// no canto superior direito das telas Gastos e Relatórios.
+/// no canto superior direito das telas Gastos, Relatórios e Cartões.
 ///
-/// Sempre oferece a aba oposta à [abaAtual]: aberto na aba Gastos mostra
-/// "Relatórios" e aberto em Relatórios mostra "Gastos". Na tela inicial
-/// ([AbaPrincipal.inicial]), que contém as duas abas, o menu mostra as duas.
-/// Os callbacks `onIrPara*` são opcional: sem eles (tela fora da navegação
-/// raiz ou já nela) o item apenas fecha o menu.
+/// Sempre oferece as demais abas à [abaAtual]: aberto na aba Gastos mostra
+/// "Relatórios" (e "Cartões", quando [onIrParaCartoes] é informado), e assim
+/// por diante. Os callbacks `onIrPara*` são opcionais: sem eles (tela fora da
+/// navegação raiz) o item apenas fecha o menu — o de Cartões, nesse caso,
+/// nem aparece.
 void showMenuApp(
   BuildContext context,
   WidgetRef ref, {
   AbaPrincipal abaAtual = AbaPrincipal.inicial,
   VoidCallback? onIrParaGastos,
   VoidCallback? onIrParaRelatorios,
+  VoidCallback? onIrParaCartoes,
 }) {
   showModalBottomSheet<void>(
     context: context,
@@ -351,6 +401,16 @@ void showMenuApp(
                 onTap: () {
                   Navigator.pop(sheetContext);
                   onIrParaRelatorios?.call();
+                },
+              ),
+            if (abaAtual != AbaPrincipal.cartoes && onIrParaCartoes != null)
+              ListTile(
+                leading: const Icon(Icons.credit_card),
+                title: Text(context.strings.cartoes),
+                subtitle: Text(context.strings.cartoesSub),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onIrParaCartoes();
                 },
               ),
             ListTile(
@@ -483,7 +543,18 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
   try {
     final expenses = ref.read(expensesProvider).value ?? const <Expense>[];
     final perfil = ref.read(profileProvider).value;
-    final csv = CsvBackup.export(expenses, perfil: perfil);
+    // Cartões viajam junto (v3): sem eles no arquivo, os gastos no crédito
+    // restauravam desvinculados no outro aparelho.
+    final cartoes = ref.read(cartoesProvider).value ?? const <CartaoCredito>[];
+    final csv = CsvBackup.export(
+      expenses,
+      perfil: perfil,
+      cartoes: cartoes,
+      nomesCartoes: {
+        for (final c in cartoes)
+          if (c.id != null) c.id!: c.nome,
+      },
+    );
     final dir = await getTemporaryDirectory();
     final file = File(
       '${dir.path}/${mangoBackupFileName()}',
@@ -579,7 +650,9 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
     messenger.showSnackBar(SnackBar(content: Text(e.message)));
     return;
   }
-  if (result.expenses.isEmpty && result.perfil == null) {
+  if (result.expenses.isEmpty &&
+      result.perfil == null &&
+      result.cartoes.isEmpty) {
     messenger.showSnackBar(
       SnackBar(
         content: Text(s.nenhumLancamentoArquivo),
@@ -592,11 +665,14 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   final perfilMsg = result.perfil == null
       ? ''
       : s.perfilTambemRestaurado(result.perfil!.nome, tema);
+  final cartoesNota =
+      result.cartoes.isEmpty ? '' : s.cartoesImportados(result.cartoes.length);
   final confirmado = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: Text(s.importarBackupTitulo),
-      content: Text(s.importarBackupMsg(result.expenses.length, perfilMsg)),
+      content: Text(s.importarBackupMsg(
+          result.expenses.length, perfilMsg + cartoesNota)),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -613,14 +689,25 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   if (result.perfil != null) {
     await ref.read(profileProvider.notifier).save(result.perfil!);
   }
+  // Cartões primeiro: religar gasto→cartão precisa dos ids locais. O mapa
+  // cobre os nomes vindos do arquivo, já fundidos aos cadastrados (mesmo
+  // nome não duplica); [religarCartoes] casa a coluna `cartao` posicional.
+  final cartoesAtuais =
+      await ref.read(cartoesProvider.notifier).mergeAll(result.cartoes);
+  final idsPorNome = <String, int>{
+    for (final c in cartoesAtuais)
+      if (c.id != null) c.nome.trim().toLowerCase(): c.id!,
+  };
+  final religados =
+      religarCartoes(result.expenses, result.vinculosCartao, idsPorNome);
   final adicionados =
-      await ref.read(expensesProvider.notifier).mergeAll(result.expenses);
+      await ref.read(expensesProvider.notifier).mergeAll(religados);
   final duplicados = result.expenses.length - adicionados;
-  final ignoradas =
-      result.skipped > 0 ? s.ignoradasLines(result.skipped) : '';
+  final extras = cartoesNota +
+      (result.skipped > 0 ? s.ignoradasLines(result.skipped) : '');
   messenger.showSnackBar(
     SnackBar(
-      content: Text(s.importacaoOk(adicionados, duplicados, ignoradas)),
+      content: Text(s.importacaoOk(adicionados, duplicados, extras)),
     ),
   );
 }

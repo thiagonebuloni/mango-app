@@ -283,6 +283,46 @@ abstract class AppStrings {
   String get importarBackupTitulo;
   String importacaoOk(int novos, int dups, String ignoradas);
   String ignoradasLines(int n);
+
+  /// Nota (com espaço inicial) somada às mensagens de import: quantos
+  /// cartões do CSV foram restaurados junto com os lançamentos.
+  String cartoesImportados(int n);
+  // ---------------- cartões de crédito ----------------
+  String get cartoes;
+  String get cartoesSub;
+  String get novoCartao;
+  String get adicionarCartao;
+  String get editarCartao;
+  String get nenhumCartao;
+  String get nenhumCartaoMsg;
+  String get banco;
+  String get informeBanco;
+  String get bandeira;
+  String get nomeCartao;
+  String get nomeCartaoHint;
+  String get informeNomeCartao;
+  String get diaFechamento;
+  String get diaPagamento;
+  String get diaInvalido;
+  String get salvarCartao;
+  String get cartaoSalvo;
+  String get excluirCartao;
+  String excluirCartaoMsg(String nome);
+  String get cartaoExcluido;
+  String get totalFatura;
+  String faturaDe(String mes);
+  String fechamentoEm(String data);
+  String pagamentoEm(String data);
+  String get semGastosCartao;
+  String get campoCartao;
+  String get semCartao;
+  String get fechamentoFatura;
+  String get pagamentoFatura;
+  String lembreteFechamento(String nome);
+  String lembretePagamento(String nome);
+  String get permissaoNotificacoes;
+  String bandeiraLabel(String name);
+
   String categoriaLabel(String name);
   String pagamentoLabel(String name);
   String tipoLabel(String name);

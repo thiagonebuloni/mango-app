@@ -70,7 +70,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         messenger.showSnackBar(SnackBar(content: Text(e.message)));
         return;
       }
-      if (result.perfil == null && result.expenses.isEmpty) {
+      if (result.perfil == null &&
+          result.expenses.isEmpty &&
+          result.cartoes.isEmpty) {
         messenger.showSnackBar(SnackBar(content: Text(s.nenhumDadoBackup)));
         return;
       }
@@ -93,9 +95,18 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
           ),
         );
         if (confirmado != true) return;
-        await ref.read(expensesProvider.notifier).mergeAll(result.expenses);
+        final cartoesAtuais =
+            await ref.read(cartoesProvider.notifier).mergeAll(result.cartoes);
+        final idsPorNome = <String, int>{
+          for (final c in cartoesAtuais)
+            if (c.id != null) c.nome.trim().toLowerCase(): c.id!,
+        };
+        await ref.read(expensesProvider.notifier).mergeAll(religarCartoes(
+            result.expenses, result.vinculosCartao, idsPorNome));
         if (!mounted) return;
-        messenger.showSnackBar(SnackBar(content: Text(s.lancamentosImportados(result.expenses.length))));
+        messenger.showSnackBar(SnackBar(
+            content: Text(
+                '${s.lancamentosImportados(result.expenses.length)}${result.cartoes.isEmpty ? '' : s.cartoesImportados(result.cartoes.length)}')));
         await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileSetupScreen()));
         return;
       }
@@ -120,9 +131,18 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
       );
       if (confirmado != true) return;
       await ref.read(profileProvider.notifier).save(perfil);
-      final adicionados = await ref.read(expensesProvider.notifier).mergeAll(result.expenses);
+      final cartoesAtuais =
+          await ref.read(cartoesProvider.notifier).mergeAll(result.cartoes);
+      final idsPorNome = <String, int>{
+        for (final c in cartoesAtuais)
+          if (c.id != null) c.nome.trim().toLowerCase(): c.id!,
+      };
+      final adicionados = await ref.read(expensesProvider.notifier).mergeAll(
+          religarCartoes(result.expenses, result.vinculosCartao, idsPorNome));
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(s.backupRestaurado(adicionados))));
+      messenger.showSnackBar(SnackBar(
+          content: Text(
+              '${s.backupRestaurado(adicionados)}${result.cartoes.isEmpty ? '' : s.cartoesImportados(result.cartoes.length)}')));
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileSetupScreen(existing: perfil)));
     } finally {
       if (mounted) setState(() => _restaurando = false);

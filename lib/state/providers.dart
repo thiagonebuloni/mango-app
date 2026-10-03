@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../services/receipt_parser.dart';
 import '../services/receipt_photo.dart';
 import '../services/seguranca.dart';
+import '../services/notificacoes.dart';
 
 /// Estado reativo dos gastos: carrega do SQLite e re-carrega após mutações.
 class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
@@ -354,6 +355,122 @@ List<DateTime> sortedDays(Map<DateTime, int> dayMap) {
     ..sort((a, b) => b.compareTo(a));
 }
 
+/// Despesas **no crédito** vinculadas ao cartão [cartaoId] dentro do mês de
+/// [mes] (o dia de [mes] é ignorado): é a base da fatura e dos relatórios por
+/// categoria/dia da tela de cartões.
+///
+/// A checagem da forma protege os dados de um `cartao_id` órfão (lançamento
+/// editado para PIX/dinheiro, backup importado): fatura é só o que foi
+/// comprado no crédito.
+List<Expense> gastosDoCartao(
+    Iterable<Expense> expenses, int cartaoId, DateTime mes) {
+  final inicio = Periods.startOfMonth(mes);
+  final fim = DateTime(inicio.year, inicio.month + 1);
+  return [
+    for (final e in expenses)
+      if (e.cartaoId == cartaoId &&
+          e.forma == PaymentMethod.credito &&
+          !e.isReceita &&
+          !e.dataHora.isBefore(inicio) &&
+          e.dataHora.isBefore(fim))
+        e,
+  ];
+}
+
+/// Religa os lançamentos de um backup CSV aos cartões do aparelho.
+///
+/// [vinculosCartao] traz, na mesma ordem de [expenses], o nome da coluna
+/// `cartao` de cada linha (`''` = sem cartão); [idsPorNome] mapeia nome → id
+/// local, montado depois de fundir os cartões do arquivo com os já
+/// cadastrados (mesmo nome não duplica). Nome fora do mapa vira `null`: o
+/// gasto fica sem cartão em vez de apontar para o errado. Comparação por
+/// nome entre minúsculas, a mesma regra do [CartoesNotifier.mergeAll].
+List<Expense> religarCartoes(List<Expense> expenses,
+    List<String> vinculosCartao, Map<String, int> idsPorNome) {
+  if (vinculosCartao.isEmpty) return expenses;
+  return [
+    for (var i = 0; i < expenses.length; i++)
+      i < vinculosCartao.length
+          ? expenses[i].copyWith(
+              cartaoId: idsPorNome[vinculosCartao[i].trim().toLowerCase()])
+          : expenses[i],
+  ];
+}
+
+/// Serviço de notificações do app: fica em provedor para os testes
+/// conseguirem trocar por um falso (o real só existe em aparelho).
+final notificacoesProvider =
+    Provider<NotificacoesService>((ref) => NotificacoesService());
+
+/// Estado reativo dos cartões de crédito cadastrados.
+final cartoesProvider =
+    AsyncNotifierProvider<CartoesNotifier, List<CartaoCredito>>(
+        CartoesNotifier.new);
+
+class CartoesNotifier extends AsyncNotifier<List<CartaoCredito>> {
+  @override
+  Future<List<CartaoCredito>> build() => DBHelper.instance.allCartoes();
+
+  Future<void> _reload() async {
+    state = AsyncData(await DBHelper.instance.allCartoes());
+  }
+
+  /// Cadastra o cartão, agenda os lembretes e devolve a cópia com o id
+  /// gerado pelo banco (as notificações precisam dele).
+  Future<CartaoCredito> add(CartaoCredito cartao) async {
+    final id = await DBHelper.instance.insertCartao(cartao);
+    final salvo = cartao.copyWith(id: id);
+    await _reload();
+    final notificacoes = ref.read(notificacoesProvider);
+    // Permissão pedida só aqui, quando o usuário acabou de cadastrar o
+    // cartão e o motivo do pedido está na tela.
+    await notificacoes.solicitarPermissao();
+    await notificacoes.agendarLembretes(salvo);
+    return salvo;
+  }
+
+  Future<void> edit(CartaoCredito cartao) async {
+    await DBHelper.instance.updateCartao(cartao);
+    await _reload();
+    // Dias alterados: reagenda os dois lembretes.
+    await ref.read(notificacoesProvider).agendarLembretes(cartao);
+  }
+
+  /// Agrega os cartões de um backup CSV aos já cadastrados, sem apagar nada.
+  ///
+  /// O cruzamento é pelo **nome** (mesma regra da coluna `cartao` do CSV):
+  /// cartão já cadastrado não duplica. Os novos entram com id gerado e ganham
+  /// os lembretes de fechamento/pagamento. Retorna a lista completa após a
+  /// fusão — o chamador monta o mapa nome→id para religar os gastos.
+  Future<List<CartaoCredito>> mergeAll(List<CartaoCredito> importados) async {
+    final atuais = await DBHelper.instance.allCartoes();
+    final porNome = <String, CartaoCredito>{
+      for (final c in atuais) c.nome.trim().toLowerCase(): c,
+    };
+    for (final cartao in importados) {
+      final chave = cartao.nome.trim().toLowerCase();
+      if (chave.isEmpty || porNome.containsKey(chave)) continue;
+      final id = await DBHelper.instance.insertCartao(cartao);
+      final salvo = cartao.copyWith(id: id);
+      atuais.add(salvo);
+      porNome[chave] = salvo;
+      await ref.read(notificacoesProvider).agendarLembretes(salvo);
+    }
+    await _reload();
+    return atuais;
+  }
+
+  /// Apaga o cartão. Os gastos ficam (só perdem o vínculo), então os
+  /// relatórios também recarregam.
+  Future<void> delete(int id) async {
+    await DBHelper.instance.deleteCartao(id);
+    await _reload();
+    await ref.read(notificacoesProvider).cancelarLembretes(id);
+    ref.invalidate(expensesProvider);
+    ref.invalidate(expensesForReportsProvider);
+  }
+}
+
 class PeriodRange {
   final DateTime start;
   final DateTime end;
@@ -363,6 +480,43 @@ class PeriodRange {
 
   bool contains(DateTime dt) => !dt.isBefore(start) && dt.isBefore(endExclusive);
 }
+
+// ---------------- mês em exibição por tela ----------------
+
+/// Mês mostrado por uma tela com seletor de mês (sempre dia 1).
+///
+/// Cada tela guarda o seu em um provedor próprio ([mesGastosProvider] na tela
+/// Gastos e [mesCartoesProvider] na tela Cartões): trocar o mês de uma não
+/// mexe no da outra. O estado vive no `ProviderScope`, acima da navegação —
+/// trocar de aba, sair para outra tela e voltar mantêm o período escolhido.
+class MesVisivelNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() => Periods.startOfMonth(DateTime.now());
+
+  /// Passa a exibir [mes] (o dia é normalizado para o dia 1).
+  void mostrar(DateTime mes) => state = Periods.startOfMonth(mes);
+
+  /// Avança/retrocede [delta] meses (negativo = meses passados).
+  void mudarPor(int delta) =>
+      mostrar(DateTime(state.year, state.month + delta));
+
+  /// `true` quando o mês exibido é o corrente — não existe mês futuro a
+  /// mostrar, então o botão de "próximo mês" fica desligado.
+  bool get eMesAtual {
+    final agora = DateTime.now();
+    return state.year == agora.year && state.month == agora.month;
+  }
+}
+
+/// Mês em exibição na tela **Gastos**.
+final mesGastosProvider = NotifierProvider<MesVisivelNotifier, DateTime>(
+  MesVisivelNotifier.new,
+);
+
+/// Mês em exibição na tela **Cartões** — independente do de Gastos.
+final mesCartoesProvider = NotifierProvider<MesVisivelNotifier, DateTime>(
+  MesVisivelNotifier.new,
+);
 
 // ---------------- bloqueio do app (PIN + biometria) ----------------
 

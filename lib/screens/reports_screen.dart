@@ -17,7 +17,11 @@ class ReportsScreen extends ConsumerStatefulWidget {
   /// tela é usada fora dela: o item do menu apenas fecha.
   final VoidCallback? onVerGastos;
 
-  const ReportsScreen({super.key, this.onVerGastos});
+  /// Troca para a aba de Cartões; `null` fora da navegação raiz (aí o item
+  /// de Cartões nem aparece no menu).
+  final VoidCallback? onVerCartoes;
+
+  const ReportsScreen({super.key, this.onVerGastos, this.onVerCartoes});
 
   @override
   ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
@@ -90,6 +94,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ref,
               abaAtual: AbaPrincipal.relatorios,
               onIrParaGastos: widget.onVerGastos,
+              onIrParaCartoes: widget.onVerCartoes,
             ),
           ),
         ],
@@ -215,7 +220,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     child: Center(child: Text(context.strings.semGastosPeriodo)),
                   )
                 else
-                  _DaySummaryCard(
+                  DaySummaryCard(
                     dayMap: byDay,
                     expenses: inPeriod,
                     corDestaque: destaque,
@@ -225,7 +230,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   Center(child: Text(context.strings.semDados))
                 else ...[
                   if (byCategory.isNotEmpty)
-                    _CategoryCard(
+                    CategoryCard(
                       data: byCategory,
                       corDestaque: destaque,
                     ),
@@ -482,12 +487,15 @@ class _BalanceLegend extends StatelessWidget {
   }
 }
 
-class _DaySummaryCard extends StatelessWidget {
+/// Resumo por dia (totais + lista expansível): usado nos Relatórios e na
+/// tela de detalhe do cartão.
+class DaySummaryCard extends StatelessWidget {
   final Map<DateTime, int> dayMap;
   final List<Expense> expenses;
   final Color? corDestaque;
 
-  const _DaySummaryCard({
+  const DaySummaryCard({
+    super.key,
     required this.dayMap,
     required this.expenses,
     this.corDestaque,
@@ -559,11 +567,13 @@ class _DaySummaryCard extends StatelessWidget {
   }
 }
 
-class _CategoryCard extends StatelessWidget {
+/// Gastos por categoria (pizza + lista expansível): usado nos Relatórios e
+/// na tela de detalhe do cartão.
+class CategoryCard extends StatelessWidget {
   final Map<Category, int> data;
   final Color? corDestaque;
 
-  const _CategoryCard({required this.data, this.corDestaque});
+  const CategoryCard({super.key, required this.data, this.corDestaque});
 
   @override
   Widget build(BuildContext context) {

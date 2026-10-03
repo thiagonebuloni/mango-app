@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_locale.dart';
 import '../l10n/l10n_format.dart';
@@ -54,6 +53,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   late EntryKind _tipo;
   DateTime _dataHora = DateTime.now();
 
+  /// Cartão de crédito vinculado ao lançamento (`null` = sem cartão); só
+  /// aparece/preenche quando a forma de pagamento é Crédito.
+  int? _cartaoId;
+
   bool get _isEdit => widget.expense != null;
   bool get _isReceita => _tipo == EntryKind.receita;
 
@@ -100,6 +103,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   late final PaymentMethod _formaAbertura;
   late final EntryKind _tipoAbertura;
   late final DateTime _dataHoraAbertura;
+  late final int? _cartaoIdAbertura;
 
   /// Aviso sob o campo estabelecimento quando há sufixo "x/y": quantos
   /// lançamentos mensais serão criados e com qual valor. Exibido em caixa
@@ -125,6 +129,16 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         ate);
   }
 
+  /// Cartões cadastrados: alimenta o dropdown de vínculo quando a forma de
+  /// pagamento é Crédito.
+  List<CartaoCredito> get _cartoes =>
+      ref.watch(cartoesProvider).value ?? const <CartaoCredito>[];
+
+  /// Valor do dropdown de cartão: `null` quando nada foi escolhido ou quando
+  /// o cartão escolhido já foi apagado (evita item fora das opções).
+  int? _cartaoEfetivo(List<CartaoCredito> cartoes) =>
+      cartoes.any((c) => c.id == _cartaoId) ? _cartaoId : null;
+
   /// `true` quando o usuário alterou algo desde a abertura da tela.
   ///
   /// Compara com o snapshot salvo no [initState]; nunca com `DateTime.now()`
@@ -137,7 +151,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       _categoria != _categoriaAbertura ||
       _forma != _formaAbertura ||
       _tipo != _tipoAbertura ||
-      _dataHora != _dataHoraAbertura;
+      _dataHora != _dataHoraAbertura ||
+      _cartaoId != _cartaoIdAbertura;
 
   @override
   void initState() {
@@ -145,11 +160,9 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     final e = widget.expense;
     final d = widget.fromDraft;
     final total = e?.valorCentavos ?? d?.draft.totalCentavos;
-    _valor = TextEditingController(
-      text: total != null
-          ? (total / 100).toStringAsFixed(2).replaceAll('.', ',')
-          : '',
-    );
+    // Começa em "0,00": a máscara preenche dos centavos para cima, então o
+    // campo nunca abre vazio nem aceita valor formatado "na mão".
+    _valor = TextEditingController(text: formatMoneyInput(total ?? 0));
     _estabelecimento = TextEditingController(
         text: e?.estabelecimento ?? d?.draft.estabelecimento ?? '');
     _descricao = TextEditingController(text: e?.descricao ?? '');
@@ -161,6 +174,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         CategoryX.paraTipo(_tipo).contains(inicial) ? inicial : _padraoPara(_tipo);
     _forma = e?.forma ?? d?.draft.pagamento ?? PaymentMethod.outros;
     _dataHora = e?.dataHora ?? d?.draft.dataHora ?? DateTime.now();
+    _cartaoId = e?.cartaoId;
     _valorAbertura = _valor.text;
     _estabelecimentoAbertura = _estabelecimento.text;
     _descricaoAbertura = _descricao.text;
@@ -168,6 +182,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _formaAbertura = _forma;
     _tipoAbertura = _tipo;
     _dataHoraAbertura = _dataHora;
+    _cartaoIdAbertura = _cartaoId;
     _carregarFotoExistente();
   }
 
@@ -238,6 +253,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       tipo: _tipo,
       descricao: _descricao.text.trim(),
       estabelecimento: _estabelecimento.text.trim(),
+      cartaoId: _forma == PaymentMethod.credito ? _cartaoId : null,
     );
 
     final notifier = ref.read(expensesProvider.notifier);
@@ -413,11 +429,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                   prefixText: '${s.currencySymbol} ',
                   hintText: s.valorHint,
                 ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-                ],
+                // Sem decimal no teclado: a vírgula é colocada pela máscara,
+                // não digitada (a máscara descarta ponto e vírgula de
+                // qualquer forma).
+                keyboardType: TextInputType.number,
+                inputFormatters: const [CurrencyInputFormatter()],
                 validator: (v) => parseMoneyInput(v ?? '') == null
                     ? s.informeValor
                     : null,
@@ -487,8 +503,29 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                     DropdownMenuItem(
                         value: p, child: Text(paymentLabelOf(context, p))),
                 ],
-                onChanged: (p) => setState(() => _forma = p!),
+                onChanged: (p) => setState(() {
+                  _forma = p!;
+                  // Fora do crédito o vínculo com cartão não faz sentido.
+                  if (_forma != PaymentMethod.credito) _cartaoId = null;
+                }),
               ),
+              if (_forma == PaymentMethod.credito && _cartoes.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  initialValue: _cartaoEfetivo(_cartoes),
+                  decoration: InputDecoration(labelText: s.campoCartao),
+                  items: [
+                    DropdownMenuItem<int?>(
+                        value: null, child: Text(s.semCartao)),
+                    for (final c in _cartoes)
+                      DropdownMenuItem<int?>(
+                        value: c.id,
+                        child: Text('${c.nome} · ${c.banco}'),
+                      ),
+                  ],
+                  onChanged: (id) => setState(() => _cartaoId = id),
+                ),
+              ],
               const SizedBox(height: 12),
               ListTile(
                 contentPadding: EdgeInsets.zero,

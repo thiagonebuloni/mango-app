@@ -26,7 +26,8 @@ class DBHelper {
       origem TEXT,
       tipo TEXT NOT NULL DEFAULT 'despesa',
       foto TEXT,
-      raw TEXT
+      raw TEXT,
+      cartao_id INTEGER
     )
   ''';
 
@@ -71,6 +72,20 @@ class DBHelper {
     )
   ''';
 
+  /// Cartões de crédito: só o necessário para separar os gastos do mês e
+  /// avisar fechamento/pagamento — nenhum dado do plástico (número, nome,
+  /// validade). Uma linha por cartão.
+  static const _cartoesTable = '''
+    CREATE TABLE cartoes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      banco TEXT NOT NULL,
+      bandeira TEXT NOT NULL,
+      nome TEXT NOT NULL,
+      dia_fechamento INTEGER NOT NULL,
+      dia_pagamento INTEGER NOT NULL
+    )
+  ''';
+
   /// v1 = gastos + memória de categorias; v2 = perfil do usuário;
   /// v3 = coluna `tipo` (despesa/receita) em expenses;
   /// v4 = coluna `tema_claro` (tema claro/escuro) em profile;
@@ -80,8 +95,10 @@ class DBHelper {
   /// (`tema_claro DEFAULT 0`);
   /// v7 = tabela `seguranca` (bloqueio com PIN + biometria);
   /// v8 = trava por tentativas erradas (`tentativas_falhas` e `bloqueado_ate`)
-  /// em `seguranca`.
-  static const _dbVersion = 8;
+  /// em `seguranca`;
+  /// v9 = tabela `cartoes` + coluna `cartao_id` em `expenses` (vínculo do
+  /// gasto com o cartão de crédito).
+  static const _dbVersion = 9;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -94,6 +111,7 @@ class DBHelper {
         await db.execute(_merchantsTable);
         await db.execute(_profileTable);
         await db.execute(_segurancaTable);
+        await db.execute(_cartoesTable);
       },
       onUpgrade: (db, oldVersion, _) async {
         if (oldVersion < 2) await db.execute(_profileTable);
@@ -152,6 +170,16 @@ class DBHelper {
                 'ALTER TABLE seguranca ADD COLUMN bloqueado_ate INTEGER');
           }
         }
+        if (oldVersion < 9) {
+          // Cartões de crédito: gastos antigos ficam sem vínculo (cartao_id
+          // NULL) — o usuário liga os lançamentos pela edição, se quiser.
+          await db.execute(_cartoesTable);
+          final cols = await db.rawQuery('PRAGMA table_info(expenses)');
+          final nomes = cols.map((c) => c['name'] as String?).toSet();
+          if (!nomes.contains('cartao_id')) {
+            await db.execute('ALTER TABLE expenses ADD COLUMN cartao_id INTEGER');
+          }
+        }
       },
     );
   }
@@ -191,6 +219,35 @@ class DBHelper {
       orderBy: 'data_hora DESC',
     );
     return rows.map(Expense.fromMap).toList();
+  }
+
+  // ---------------- cartões de crédito ----------------
+
+  Future<int> insertCartao(CartaoCredito cartao) async {
+    final map = cartao.toMap()..remove('id');
+    return db.insert('cartoes', map);
+  }
+
+  Future<void> updateCartao(CartaoCredito cartao) async {
+    await db.update(
+      'cartoes',
+      cartao.toMap(),
+      where: 'id = ?',
+      whereArgs: [cartao.id],
+    );
+  }
+
+  /// Apaga o cartão e **desvincula** os gastos (mantém o lançamento, só perde
+  /// o `cartao_id`): nunca se apaga gasto junto com o cartão.
+  Future<void> deleteCartao(int id) async {
+    await db.update('expenses', {'cartao_id': null},
+        where: 'cartao_id = ?', whereArgs: [id]);
+    await db.delete('cartoes', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<CartaoCredito>> allCartoes() async {
+    final rows = await db.query('cartoes', orderBy: 'id');
+    return rows.map(CartaoCredito.fromMap).toList();
   }
 
   // ---------------- merchants (memória de categorização) ----------------
@@ -360,24 +417,36 @@ class DBHelper {
   }
 }
 
-/// Backup CSV dos lançamentos (+ perfil do usuário no topo).
+/// Backup CSV dos lançamentos (+ perfil e cartões no topo).
 ///
-/// Linhas `#` (ex.: `# MANGO_BACKUP v2`, `# AVISO;...` e `# PERFIL;...`) são
-/// comentários:
-/// ignoradas por planilhas e por backups antigos. O perfil guarda
-/// `nome/avatar/corFundo (ARGB)/tema (claro|escuro)`; a foto do avatar não
-/// entra no backup (caminho local) e deve ser recolocada na edição final.
+/// Linhas `#` (ex.: `# MANGO_BACKUP v3`, `# AVISO;...`, `# PERFIL;...` e
+/// `# CARTAO;...`) são comentários: ignoradas por planilhas e por backups
+/// antigos. O perfil guarda `nome/avatar/corFundo (ARGB)/tema (claro|escuro)`;
+/// a foto do avatar não entra no backup (caminho local) e deve ser recolocada
+/// na edição final. Cada linha `# CARTAO;...` guarda um cartão de crédito
+/// (nada de dado sensível: só banco, bandeira, nome e dias de fechamento e
+/// pagamento) — os gastos no crédito religam ao cartão pelo **nome**
+/// (coluna `cartao`), então cartões e gastos viajam juntos na troca de
+/// aparelho.
 ///
 /// Formato: cabeçalho `tipo;valor;data_hora;categoria;forma;descricao;
-/// estabelecimento;origem` com `;` como separador (padrão BR, abre direto
-/// no Excel/LibreOffice) e campos de texto entre aspas com escape `""`.
-/// A data vai em ISO-8601 (`2026-03-15T12:30:00.000`) e o valor em
+/// estabelecimento;origem;cartao` com `;` como separador (padrão BR, abre
+/// direto no Excel/LibreOffice) e campos de texto entre aspas com escape
+/// `""`. A data vai em ISO-8601 (`2026-03-15T12:30:00.000`) e o valor em
 /// centavos (inteiro), para não perder precisão nem depender de locale.
+/// Backups v2 (cabeçalho sem `;cartao`, marcador `MANGO_BACKUP v2`) continuam
+/// abrindo: entram sem cartão vinculado.
 class CsvBackup {
   static const header =
+      'tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem;cartao';
+
+  /// Cabeçalho v2 (8 colunas, sem o vínculo do cartão): só para leitura de
+  /// backups antigos — a escrita usa sempre [header].
+  static const headerV2 =
       'tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem';
-  static const backupMarker = '# MANGO_BACKUP v2';
+  static const backupMarker = '# MANGO_BACKUP v3';
   static const perfilMarker = '# PERFIL;';
+  static const cartaoMarker = '# CARTAO;';
 
   /// Aviso gravado no topo de todo arquivo exportado: o backup é **texto
   /// puro, sem senha**.
@@ -423,8 +492,13 @@ class CsvBackup {
   static String _esc(String value) =>
       '"${value.replaceAll('"', '""')}"';
 
-  /// Serializa os lançamentos para o texto CSV, incluindo [perfil] no topo.
-  static String export(List<Expense> expenses, {UserProfile? perfil}) {
+  /// Serializa os lançamentos para o texto CSV, incluindo [perfil] e [cartoes]
+  /// no topo (v3). Nomes de cartão no mapa religam cada gasto no crédito ao
+  /// cartão certo na restauração; fora do mapa, sai `cartao` vazio.
+  static String export(List<Expense> expenses,
+      {UserProfile? perfil,
+      List<CartaoCredito> cartoes = const [],
+      Map<int, String> nomesCartoes = const {}}) {
     final sorted = expenses.toList()
       ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
     final buf = StringBuffer(backupMarker);
@@ -446,8 +520,26 @@ class CsvBackup {
         ..write(';tema=')
         ..write(perfil.temaClaro ? 'claro' : 'escuro');
     }
+    final ordenados = cartoes.toList()
+      ..sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+    for (final c in ordenados) {
+      buf
+        ..write('\n')
+        ..write(cartaoMarker)
+        ..write('banco=')
+        ..write(_esc(c.banco))
+        ..write(';bandeira=')
+        ..write(c.bandeira.name)
+        ..write(';nome=')
+        ..write(_esc(c.nome))
+        ..write(';fechamento=')
+        ..write(c.diaFechamento)
+        ..write(';pagamento=')
+        ..write(c.diaPagamento);
+    }
     buf.write('\n$header');
     for (final e in sorted) {
+      final nomeCartao = e.cartaoId == null ? '' : (nomesCartoes[e.cartaoId] ?? '');
       buf
         ..write('\n')
         ..write(e.tipo.name)
@@ -464,16 +556,23 @@ class CsvBackup {
         ..write(';')
         ..write(_esc(e.estabelecimento))
         ..write(';')
-        ..write(e.origem.name);
+        ..write(e.origem.name)
+        ..write(';')
+        ..write(_esc(nomeCartao));
     }
     return buf.toString();
   }
 
-  /// Resultado da importação: lançamentos válidos + perfil + linhas ignoradas.
+  /// Resultado da importação: lançamentos válidos + perfil + cartões + linhas
+  /// ignoradas.
   ///
   /// Lança [CsvImportException] quando o texto passa de [maxBytes]/[maxLines]
   /// (A2): quem chama mostra a mensagem em vez de deixar o app morrer por
   /// falta de memória.
+  ///
+  /// O vínculo gasto→cartão viaja pelo **nome** (`cartaoPorNome`): ids do banco
+  /// de outro aparelho não valem nada aqui — quem importa religa pelo nome
+  /// depois de fundir os cartões.
   static CsvImportResult import(String csvText) {
     _verificarLimites(csvText);
     final lines = const LineSplitter().convert(csvText.trim());
@@ -481,25 +580,41 @@ class CsvBackup {
       return const CsvImportResult(expenses: [], skipped: 0);
     }
     final expenses = <Expense>[];
+    final vinculosCartao = <String>[];
+    final cartaoPorNome = <String, String>{};
     var skipped = 0;
     UserProfile? perfil;
+    final cartoes = <CartaoCredito>[];
     for (final raw in lines) {
       final line = raw.trim();
       if (line.isEmpty) continue;
       if (line.startsWith('#')) {
         final parsed = _parsePerfilLine(line);
         if (parsed != null) perfil = parsed;
+        final cartao = _parseCartaoLine(line);
+        if (cartao != null) cartoes.add(cartao);
         continue;
       }
-      if (line == header) continue;
-      final expense = _parseLine(line);
-      if (expense == null) {
+      if (line == header || line == headerV2) continue;
+      final parsed = _parseLine(line);
+      if (parsed == null) {
         skipped++;
       } else {
-        expenses.add(expense);
+        expenses.add(parsed.expense);
+        vinculosCartao.add(parsed.cartaoNome);
+        if (parsed.cartaoNome.isNotEmpty) {
+          cartaoPorNome.putIfAbsent(
+              parsed.cartaoNome, () => parsed.cartaoNome);
+        }
       }
     }
-    return CsvImportResult(expenses: expenses, skipped: skipped, perfil: perfil);
+    return CsvImportResult(
+        expenses: expenses,
+        skipped: skipped,
+        perfil: perfil,
+        cartoes: cartoes,
+        cartaoPorNome: cartaoPorNome,
+        vinculosCartao: vinculosCartao);
   }
 
   /// Recusa textos que estourariam a memória (A2).
@@ -593,6 +708,42 @@ class CsvBackup {
     return map;
   }
 
+  /// Interpreta a linha `# CARTAO;banco=...;bandeira=...;nome=...;
+  /// fechamento=..;pagamento=..`. `null` = linha não é de cartão ou está
+  /// inválida (banco/nome vazios, dias fora de 1..31, bandeira desconhecida).
+  /// Dias e nomes passam pelos mesmos limites da tela de cartão: o arquivo
+  /// pode ter sido editado à mão.
+  static CartaoCredito? _parseCartaoLine(String line) {
+    if (!line.startsWith(cartaoMarker)) return null;
+    final resto = line.substring(cartaoMarker.length);
+    final campos = _splitPerfilFields(resto);
+    final banco = (campos['banco'] ?? '').trim();
+    final nome = (campos['nome'] ?? '').trim();
+    if (banco.isEmpty || nome.isEmpty) return null;
+    if (banco.length > 40 || nome.length > 40) return null;
+    final bandeiraNome = (campos['bandeira'] ?? '').trim();
+    if (!BandeiraCartao.values.any((b) => b.name == bandeiraNome)) {
+      return null;
+    }
+    final fechamento = int.tryParse((campos['fechamento'] ?? '').trim());
+    final pagamento = int.tryParse((campos['pagamento'] ?? '').trim());
+    if (fechamento == null ||
+        pagamento == null ||
+        fechamento < 1 ||
+        fechamento > 31 ||
+        pagamento < 1 ||
+        pagamento > 31) {
+      return null;
+    }
+    return CartaoCredito(
+      banco: banco,
+      bandeira: BandeiraCartaoX.fromName(bandeiraNome),
+      nome: nome,
+      diaFechamento: fechamento,
+      diaPagamento: pagamento,
+    );
+  }
+
   /// Quebra a linha respeitando aspas (`;` dentro de `"..."` não separa).
   static List<String> _splitLine(String line) {
     final fields = <String>[];
@@ -624,15 +775,15 @@ class CsvBackup {
     return fields;
   }
 
-  static Expense? _parseLine(String line) {
+  static ({Expense expense, String cartaoNome})? _parseLine(String line) {
     if (line.trim().isEmpty) return null;
     final f = _splitLine(line);
-    if (f.length != 8) return null;
+    if (f.length != 8 && f.length != 9) return null;
     final valor = int.tryParse(f[1].trim());
     final data = DateTime.tryParse(f[2].trim());
     if (valor == null || valor <= 0 || data == null) return null;
     final tipo = EntryKindX.fromName(f[0].trim());
-    return Expense(
+    final expense = Expense(
       tipo: tipo,
       valorCentavos: valor,
       dataHora: data,
@@ -642,6 +793,8 @@ class CsvBackup {
       estabelecimento: f[6],
       origem: f[7].trim() == 'ocr' ? ExpenseOrigin.ocr : ExpenseOrigin.manual,
     );
+    final cartaoNome = f.length == 9 ? f[8].trim() : '';
+    return (expense: expense, cartaoNome: cartaoNome);
   }
 }
 
@@ -650,8 +803,24 @@ class CsvImportResult {
   final List<Expense> expenses;
   final int skipped;
   final UserProfile? perfil;
+  final List<CartaoCredito> cartoes;
 
-  const CsvImportResult({required this.expenses, required this.skipped, this.perfil});
+  /// Nomes citados na coluna `cartao` (já sem repetição): servem ao diálogo de
+  /// import para dizer que os vínculos voltam junto — o mapa gasto→nome é
+  /// posicional ([vinculosCartao]), na mesma ordem de [expenses].
+  final Map<String, String> cartaoPorNome;
+
+  /// Para cada lançamento de [expenses] (mesmo índice), o nome do cartão na
+  /// coluna `cartao` (`''` = sem vínculo).
+  final List<String> vinculosCartao;
+
+  const CsvImportResult(
+      {required this.expenses,
+      required this.skipped,
+      this.perfil,
+      this.cartoes = const [],
+      this.cartaoPorNome = const {},
+      this.vinculosCartao = const []});
 }
 
 /// Erro de importação com mensagem pronta para o usuário (A2): arquivo

@@ -15,6 +15,7 @@ import 'screens/landing_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/crash_log.dart';
+import 'services/notificacoes.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
 
@@ -36,9 +37,17 @@ Future<void> main() async {
   // O perfil é lido antes do primeiro frame para o app já abrir com a cor de
   // fundo do usuário (ver [perfilInicialProvider]).
   final perfil = await DBHelper.instance.loadProfile();
+  // Lembretes de fechamento/pagamento dos cartões: o serviço nasce aqui e
+  // entra escopado para as telas agendarem/cancelarem pelo mesmo objeto.
+  final notificacoes = NotificacoesService();
+  await notificacoes.inicializar(initial);
+  await notificacoes.agendarTodos(await DBHelper.instance.allCartoes());
   runApp(
     ProviderScope(
-      overrides: [perfilInicialProvider.overrideWithValue(perfil)],
+      overrides: [
+        perfilInicialProvider.overrideWithValue(perfil),
+        notificacoesProvider.overrideWithValue(notificacoes),
+      ],
       child: const MangoApp(),
     ),
   );
