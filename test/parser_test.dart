@@ -332,5 +332,62 @@ VALOR TOTAL R\$ 12,00
       expect(addMonths(DateTime(2026, 3, 20, 14, 30), 2),
           DateTime(2026, 5, 20, 14, 30));
     });
+
+    test('addMonths aceita meses negativos (parcelas passadas)', () {
+      expect(addMonths(DateTime(2026, 1, 15), -2), DateTime(2025, 11, 15));
+      expect(addMonths(DateTime(2026, 3, 31), -1), DateTime(2026, 2, 28));
+      expect(addMonths(DateTime(2026, 3, 20), -12), DateTime(2025, 3, 20));
+    });
+
+    test('expandirParcelasEdicao: linha editada vira a parcela atual', () {
+      final lista = expandirParcelasEdicao(Expense(
+        id: 7,
+        valorCentavos: 10000,
+        dataHora: DateTime(2026, 6, 20),
+        categoria: Category.outros,
+        forma: PaymentMethod.credito,
+        estabelecimento: 'LOJA XYZ 4/10',
+      ));
+      expect(lista.length, 10);
+      // Só a linha editada (4/10) mantém o id; as demais são novas.
+      expect(lista[3].id, 7);
+      expect(lista.where((e) => e.id != null).length, 1);
+      expect(lista.first.estabelecimento, 'LOJA XYZ 1/10');
+      expect(lista.last.estabelecimento, 'LOJA XYZ 10/10');
+      // Passadas para trás e futuras para frente a partir de 4/10 (junho).
+      expect(lista.first.dataHora, DateTime(2026, 3, 20));
+      expect(lista[3].dataHora, DateTime(2026, 6, 20));
+      expect(lista.last.dataHora, DateTime(2026, 12, 20));
+      final soma = lista.fold<int>(0, (t, e) => t + e.valorCentavos);
+      expect(soma, 10000);
+    });
+
+    test('expandirParcelasEdicao: 01/10 inclui as futuras', () {
+      final lista = expandirParcelasEdicao(Expense(
+        id: 1,
+        valorCentavos: 10000,
+        dataHora: DateTime(2026, 1, 10),
+        categoria: Category.outros,
+        forma: PaymentMethod.credito,
+        estabelecimento: 'LOJA XYZ 1/10',
+      ));
+      expect(lista.length, 10);
+      expect(lista.first.id, 1);
+      expect(lista.first.dataHora, DateTime(2026, 1, 10));
+      expect(lista.last.dataHora, DateTime(2026, 10, 10));
+    });
+
+    test('expandirParcelasEdicao: sem sufixo é edição simples', () {
+      final lista = expandirParcelasEdicao(Expense(
+        id: 3,
+        valorCentavos: 1000,
+        dataHora: DateTime(2026, 3, 20),
+        categoria: Category.outros,
+        forma: PaymentMethod.pix,
+        estabelecimento: 'LOJA XYZ',
+      ));
+      expect(lista.length, 1);
+      expect(lista.single.id, 3);
+    });
   });
 }

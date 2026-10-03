@@ -110,23 +110,35 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   /// própria (largura total, texto centralizado e com quebra de linha) para
   /// nunca ser cortado pelo fim da tela.
   String? get _parcelaAviso {
-    if (_isEdit) return null;
+    // Editar um lançamento que já era parcelado só atualiza a linha (não
+    // recria o grupo), então não há lançamento novo a avisar.
+    if (_isEdit && _tinhaParcelaOriginal) return null;
     final parcela =
         ReceiptParser.parseParcelaSuffix(_estabelecimento.text.trim());
-    if (parcela == null || parcela.atual >= parcela.total) return null;
-    final restantes = parcela.total - parcela.atual + 1;
+    if (parcela == null || parcela.total <= 1) return null;
+    // No cadastro a última parcela (y/y) não gera cópias; na edição o grupo
+    // inteiro é recriado, então "y/y" também vale.
+    if (!_isEdit && parcela.atual >= parcela.total) return null;
+    // Nº de linhas NOVAS: no cadastro criam-se de `atual` até `total`; na
+    // edição o grupo 1..total (a linha editada já existe e vira a parcela
+    // informada). O valor de cada parcela divide o total por todas as que
+    // compõem o grupo (todas no cadastro a partir de `atual`; as `total` na
+    // edição).
+    final divisor = _isEdit ? parcela.total : parcela.total - parcela.atual + 1;
+    final novos = _isEdit ? parcela.total - 1 : divisor;
+    if (novos <= 0) return null;
     final s = context.strings;
-    final agora = '${parcela.atual}/${parcela.total}';
+    final de = _isEdit
+        ? '1/${parcela.total}'
+        : '${parcela.atual}/${parcela.total}';
     final ate = '${parcela.total}/${parcela.total}';
     final centavos = parseMoneyInput(_valor.text);
     if (centavos == null) {
-      return s.parcelaAvisoSemValor(restantes, agora, ate);
+      return s.parcelaAvisoSemValor(novos, de, ate);
     }
-    final porParcela = centavos ~/ restantes;
-    return s.parcelaAvisoComValor(restantes,
-        formatMoney(porParcela, Localizations.maybeLocaleOf(context)),
-        agora,
-        ate);
+    final porParcela = centavos ~/ divisor;
+    return s.parcelaAvisoComValor(novos,
+        formatMoney(porParcela, Localizations.maybeLocaleOf(context)), de, ate);
   }
 
   /// Cartões cadastrados: alimenta o dropdown de vínculo quando a forma de
@@ -138,6 +150,15 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   /// o cartão escolhido já foi apagado (evita item fora das opções).
   int? _cartaoEfetivo(List<CartaoCredito> cartoes) =>
       cartoes.any((c) => c.id == _cartaoId) ? _cartaoId : null;
+
+  /// `true` quando o lançamento aberto para edição já trazia um sufixo "x/y"
+  /// no estabelecimento. Nesse caso a edição só atualiza a linha (não recria
+  /// o grupo de parcelas) — é o oposto de "incluir o parcelamento".
+  bool get _tinhaParcelaOriginal {
+    final e = widget.expense;
+    return e != null &&
+        ReceiptParser.parseParcelaSuffix(e.estabelecimento.trim()) != null;
+  }
 
   /// `true` quando o usuário alterou algo desde a abertura da tela.
   ///
@@ -259,7 +280,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     final notifier = ref.read(expensesProvider.notifier);
     int criados = 1;
     if (_isEdit) {
-      await notifier.edit(novo);
+      // Incluir o parcelamento num gasto já lançado recria o grupo (parcelas
+      // passadas e futuras); se ele já era parcelado, só atualiza a linha.
+      criados = await notifier.edit(novo,
+          expandirParcelamento: !_tinhaParcelaOriginal);
     } else {
       criados = await notifier.add(novo);
     }
@@ -273,7 +297,9 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         SnackBar(content: Text(s.lancamentoSalvoFotoNao)),
       );
     }
-    if (!_isEdit && criados > 1) {
+    // Aviso de parcelamento vale no cadastro e ao incluir o parcelamento numa
+    // edição (nos dois casos `criados > 1`).
+    if (criados > 1) {
       final parcela = ReceiptParser.parseParcelaSuffix(novo.estabelecimento);
       messenger.showSnackBar(
         SnackBar(

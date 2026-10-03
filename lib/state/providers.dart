@@ -36,14 +36,38 @@ class ExpensesNotifier extends AsyncNotifier<List<Expense>> {
   }
 
   /// Edita um gasto existente ("update" colide com a API do AsyncNotifier).
-  Future<void> edit(Expense expense) async {
-    await DBHelper.instance.updateExpense(expense);
+  ///
+  /// Com [expandirParcelamento] `true`, um sufixo "x/y" incluído na edição
+  /// ("LOJA 4/10" num gasto que não era parcelado) vira o grupo de parcelas
+  /// `1..y` (ver [expandirParcelasEdicao]): a linha editada continua sendo a
+  /// parcela `x` e as passadas/futuras entram como linhas novas. Devolve
+  /// quantos lançamentos o grupo passou a ter (1 = edição simples).
+  Future<int> edit(Expense expense, {bool expandirParcelamento = false}) async {
+    var total = 1;
+    if (expandirParcelamento) {
+      final parcelas = expandirParcelasEdicao(expense);
+      total = parcelas.length;
+      final novas = <Expense>[];
+      for (final p in parcelas) {
+        if (p.id != null) {
+          await DBHelper.instance.updateExpense(p);
+        } else {
+          novas.add(p);
+        }
+      }
+      if (novas.isNotEmpty) {
+        await DBHelper.instance.insertExpensesBatch(novas);
+      }
+    } else {
+      await DBHelper.instance.updateExpense(expense);
+    }
     if (expense.estabelecimento.trim().isNotEmpty) {
       await DBHelper.instance.memorizeMerchant(
               ReceiptParser.normalizeMerchant(expense.estabelecimento),
               expense.categoria);
     }
     await _reload();
+    return total;
   }
 
   Future<void> delete(int id) async {
@@ -136,8 +160,53 @@ List<Expense> expandirParcelas(Expense base) {
   return lista;
 }
 
+/// Expande um lançamento **em edição** no grupo de parcelas `1..y` de
+/// "LOJA x/y": a linha editada continua sendo a parcela `x` (mesmo `id` e,
+/// com ela, a foto do cupom) e as demais entram como linhas novas — as
+/// anteriores (meses passados) e as posteriores (meses futuros), cada uma
+/// gravada com o seu indicativo `n/y`.
+///
+/// Diferente de [expandirParcelas] (que num lançamento novo cria de `x` para
+/// frente, porque as anteriores não existem): aqui o usuário está
+/// **incluindo** o parcelamento num gasto já lançado e pode informar a
+/// parcela atual (`4/10`), então as passadas são recalculadas para trás.
+/// Sem sufixo válido (ou `1/1`) retorna só [base] — edição simples.
+List<Expense> expandirParcelasEdicao(Expense base) {
+  final parcela =
+      ReceiptParser.parseParcelaSuffix(base.estabelecimento.trim());
+  if (parcela == null || parcela.total <= 1) return [base];
+  final total = parcela.total;
+  final atual = parcela.atual.clamp(1, total);
+  final nomeBase = ReceiptParser.stripParcelaSuffix(base.estabelecimento);
+  // Divisão inteira em centavos: o resto (0..total-1 centavos) fica todo na
+  // 1ª parcela para a soma bater exatamente com o total informado.
+  final valorParcela = base.valorCentavos ~/ total;
+  final resto = base.valorCentavos - valorParcela * total;
+  final lista = <Expense>[];
+  for (var n = 1; n <= total; n++) {
+    // Só a linha editada guarda o `id` (é atualizada) e a foto do cupom; as
+    // demais são projeções inseridas como lançamentos novos.
+    final editada = n == atual;
+    lista.add(Expense(
+      id: editada ? base.id : null,
+      valorCentavos: valorParcela + (n == 1 ? resto : 0),
+      dataHora: addMonths(base.dataHora, n - atual),
+      categoria: base.categoria,
+      forma: base.forma,
+      descricao: base.descricao,
+      estabelecimento: '$nomeBase $n/$total',
+      origem: base.origem,
+      tipo: base.tipo,
+      fotoPath: editada ? base.fotoPath : null,
+      rawText: base.rawText,
+      cartaoId: base.cartaoId,
+    ));
+  }
+  return lista;
+}
+
 /// Soma [meses] a [data] preservando dia/hora; trava no último dia do mês
-/// (ex.: 31/01 + 1 mês = 28/02).
+/// (ex.: 31/01 + 1 mês = 28/02). Aceita meses negativos (parcelas passadas).
 ///
 /// O ano também é travado nos limites construíveis do `DateTime`
 /// (range absoluto: -271821-04-20 .. 275760-09-13): sem isso, datas
@@ -147,12 +216,23 @@ List<Expense> expandirParcelas(Expense base) {
 DateTime addMonths(DateTime data, int meses) {
   if (meses == 0) return data;
   final totalMeses = (data.month - 1) + meses;
-  final ano = _clampAno(data.year + totalMeses ~/ 12);
-  final mes = totalMeses % 12 + 1;
+  // Divisão "para baixo": com meses negativos (parcelas passadas) o `~/` do
+  // Dart truncaria para zero e jogaria o resultado um ano à frente (ex.:
+  // janeiro − 2 meses cairia em novembro do mesmo ano, não do anterior).
+  final deslocAno = _pisoDiv(totalMeses, 12);
+  final ano = _clampAno(data.year + deslocAno);
+  final mes = totalMeses - deslocAno * 12 + 1;
   final ultimoDia = DateTime(ano, mes + 1, 0).day;
   final dia = data.day > ultimoDia ? ultimoDia : data.day;
   return DateTime(
       ano, mes, dia, data.hour, data.minute, data.second, data.millisecond);
+}
+
+/// Divisão inteira arredondando **para baixo** — o `~/` do Dart trunca para
+/// zero, o que erraria o ano nos meses negativos.
+int _pisoDiv(int a, int b) {
+  final q = a ~/ b;
+  return a % b != 0 && (a < 0) != (b < 0) ? q - 1 : q;
 }
 
 /// Ano mínimo/máximo construídos com folga de segurança (meses e dias

@@ -335,6 +335,40 @@ void main() async {
       expect(texto.overflow, isNull);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('editar e incluir parcelamento mostra o aviso do grupo',
+        (tester) async {
+      final lancamento = Expense(
+        id: 9,
+        valorCentavos: 9000,
+        dataHora: DateTime(2026, 6, 20, 12),
+        categoria: Category.outros,
+        forma: PaymentMethod.credito,
+        estabelecimento: 'LOJA XYZ',
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesProvider.overrideWith(() => _FakeExpensesNotifier()),
+          ],
+          child: _makeApp(home: ExpenseFormScreen(expense: lancamento)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Sem sufixo, nada de aviso (edição simples).
+      expect(find.textContaining('Serão criados'), findsNothing);
+
+      // Inclui o parcelamento 4/10: o grupo inteiro (1..10) é recriado, então
+      // o aviso conta as 9 linhas novas e mostra o valor por parcela.
+      await tester.enterText(
+          find.byType(TextFormField).at(1), 'LOJA XYZ 4/10');
+      await tester.pump();
+
+      expect(find.textContaining('Serão criados 9 lançamentos'),
+          findsOneWidget);
+      expect(find.textContaining('9,00'), findsWidgets);
+    });
   });
 
   group('ReportsScreen (barra de períodos)', () {
