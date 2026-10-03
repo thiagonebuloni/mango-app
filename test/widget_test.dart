@@ -369,6 +369,37 @@ void main() async {
           findsOneWidget);
       expect(find.textContaining('9,00'), findsWidgets);
     });
+
+    testWidgets('tile mostra a parcela mesmo com descrição', (tester) async {
+      Expense parcela({required String descricao, required String estab}) =>
+          Expense(
+            valorCentavos: 5000,
+            dataHora: DateTime(2026, 6, 20, 12),
+            categoria: Category.outros,
+            forma: PaymentMethod.credito,
+            descricao: descricao,
+            estabelecimento: estab,
+          );
+      await tester.pumpWidget(_makeApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              ExpenseTile(expense: parcela(descricao: 'Sofá', estab: 'LOJA XYZ 3/10')),
+              ExpenseTile(expense: parcela(descricao: '', estab: 'LOJA XYZ 4/10')),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      // Com descrição: o selo da parcela continua visível.
+      expect(find.text('Sofá'), findsOneWidget);
+      expect(find.text('3/10'), findsOneWidget);
+      // Sem descrição: o título perde o sufixo e ele fica só no selo.
+      expect(find.text('LOJA XYZ'), findsOneWidget);
+      expect(find.text('4/10'), findsOneWidget);
+      expect(find.text('LOJA XYZ 4/10'), findsNothing);
+    });
   });
 
   group('ReportsScreen (barra de períodos)', () {

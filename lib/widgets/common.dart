@@ -18,6 +18,7 @@ import '../screens/expense_form_screen.dart';
 import '../screens/profile_setup_screen.dart';
 import '../screens/seguranca_screen.dart';
 import '../services/app_info.dart';
+import '../services/receipt_parser.dart';
 import '../state/providers.dart';
 
 import '../l10n/app_locale.dart';
@@ -206,6 +207,17 @@ class ExpenseTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final e = expense;
     final loc = Localizations.localeOf(context);
+    // Sufixo "x/y" de um lançamento parcelado: vira um selo à parte para a
+    // parcela (`3/10`) continuar visível mesmo quando há descrição — que
+    // substitui o estabelecimento no título e esconderia o indicativo. O
+    // sufixo sai do texto do título para não aparecer duas vezes.
+    final parcela =
+        ReceiptParser.parseParcelaSuffix(e.estabelecimento.trim());
+    final titulo = e.descricao.isNotEmpty
+        ? e.descricao
+        : (parcela == null
+            ? e.estabelecimento
+            : ReceiptParser.stripParcelaSuffix(e.estabelecimento));
     return ListTile(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -214,10 +226,18 @@ class ExpenseTile extends StatelessWidget {
         foregroundColor: e.categoria.color,
         child: Icon(e.categoria.icon),
       ),
-      title: Text(
-        e.descricao.isNotEmpty ? e.descricao : e.estabelecimento,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              titulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (parcela != null)
+            _ParcelaBadge(parcela: '${parcela.atual}/${parcela.total}'),
+        ],
       ),
       subtitle: Text(
         '${DateFormat(loc.languageCode == 'en' ? 'MMM dd' : 'dd MMM', intlLocaleName(loc)).format(e.dataHora)} · ${context.strings.categoriaLabel(e.categoria.name)}'
@@ -231,6 +251,36 @@ class ExpenseTile extends StatelessWidget {
           fontWeight: FontWeight.w600,
           fontSize: 15,
           color: e.isReceita ? const Color(0xFF059669) : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// Selo da parcela ("2/10") no [ExpenseTile]: deixa claro, na lista de gastos
+/// e nos relatórios, qual é a parcela daquele lançamento. Aparece sempre que o
+/// estabelecimento traz o sufixo "x/y", mesmo com descrição preenchida.
+class _ParcelaBadge extends StatelessWidget {
+  final String parcela;
+
+  const _ParcelaBadge({required this.parcela});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        parcela,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: primary,
         ),
       ),
     );
