@@ -147,6 +147,19 @@ void main() {
     });
   });
 
+  group('logo da bandeira', () {
+    testWidgets('BandeiraLogo desenha para cada bandeira', (tester) async {
+      for (final bandeira in BandeiraCartao.values) {
+        await tester.pumpWidget(
+          MaterialApp(home: Scaffold(body: BandeiraLogo(bandeira: bandeira))),
+        );
+        await tester.pump();
+        expect(find.byType(BandeiraLogo), findsOneWidget);
+        expect(find.byType(CustomPaint), findsWidgets);
+      }
+    });
+  });
+
   group('cores do cartão', () {
     test('banco conhecido tem a cor da marca', () {
       expect(corDoBanco('Nubank'), const Color(0xFF820AD1));
