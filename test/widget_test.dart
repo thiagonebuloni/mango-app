@@ -400,6 +400,31 @@ void main() async {
       expect(find.text('4/10'), findsOneWidget);
       expect(find.text('LOJA XYZ 4/10'), findsNothing);
     });
+
+    testWidgets('gastos por dia mostra a contagem de lançamentos', (tester) async {
+      final now = DateTime.now();
+      final dia = DateTime(now.year, now.month, now.day, 12);
+      Expense gasto(String estab) => Expense(
+            valorCentavos: 1000,
+            dataHora: dia,
+            categoria: Category.mercado,
+            forma: PaymentMethod.dinheiro,
+            estabelecimento: estab,
+          );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider.overrideWith(
+                () => _FakeReportsNotifier([gasto('A'), gasto('B'), gasto('C')])),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // "qui., 24/09 (3)": a data vem seguida da contagem de lançamentos.
+      expect(find.textContaining('(3)'), findsOneWidget);
+    });
   });
 
   group('ReportsScreen (barra de períodos)', () {

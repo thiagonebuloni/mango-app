@@ -548,7 +548,7 @@ class DaySummaryCard extends StatelessWidget {
                 ),
               ),
               title: Text(
-                dataCurta(day),
+                '${dataCurta(day)} (${dayExpenses.length})',
                 style: const TextStyle(fontSize: 13),
               ),
               trailing: Text(
