@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mantém os ícones da notificação de cartão após o R8 (release): sem isso
+     o otimizador pode descartar o small icon e o large icon como "não usados"
+     (só o plugin os referencia, por nome, em tempo de execução) e a
+     notificação sairia sem ícone — ou nem apareceria. Padrão do exemplo
+     oficial do flutter_local_notifications (res/raw/keep.xml). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notificacao,@drawable/ic_notificacao_grande" />

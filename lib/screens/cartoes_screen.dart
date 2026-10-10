@@ -201,6 +201,11 @@ class _CartaoComTotal extends StatelessWidget {
     final total = totalOf(gastos);
     final fechamento = proximoLembrete(cartao.diaFechamento, DateTime.now());
     final pagamento = proximoLembrete(cartao.diaPagamento, DateTime.now());
+    // Fração do limite já usada na fatura do mês (`null` = sem limite).
+    final limite = cartao.limiteCentavos;
+    final fracaoUsada = (limite == null || limite <= 0)
+        ? null
+        : (total / limite).clamp(0.0, 1.0);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -224,9 +229,7 @@ class _CartaoComTotal extends StatelessWidget {
                         ),
                         Text(
                           formatMoneyOf(context, total),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
+                          style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         if (gastos.isEmpty)
@@ -234,6 +237,23 @@ class _CartaoComTotal extends StatelessWidget {
                             s.semGastosCartao,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                        if (fracaoUsada != null) ...[
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: fracaoUsada,
+                              minHeight: 6,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            s.limiteDisponivel(
+                              formatMoneyOf(context, limite! - total),
+                            ),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -35,6 +35,7 @@ abstract class AppStrings {
     }
     return const PtBrStrings();
   }
+
   String get appName;
   String get ok;
   String get cancel;
@@ -304,6 +305,12 @@ abstract class AppStrings {
   String get diaFechamento;
   String get diaPagamento;
   String get diaInvalido;
+  String get limiteCartao;
+  String get limiteCartaoHint;
+  String get limiteInvalido;
+  String limiteDisponivel(String valor);
+  String limiteUsado(String percentual);
+  String get semLimite;
   String get salvarCartao;
   String get cartaoSalvo;
   String get excluirCartao;

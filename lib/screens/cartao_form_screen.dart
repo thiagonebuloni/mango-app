@@ -5,6 +5,7 @@ import '../l10n/app_locale.dart';
 import '../models/models.dart';
 import '../state/providers.dart';
 import '../widgets/cartao_visual.dart';
+import '../widgets/common.dart';
 
 /// Cadastro/edição de cartão de crédito — só dados não sensíveis: banco,
 /// bandeira, nome escolhido pelo usuário, dia de fechamento e dia de
@@ -23,6 +24,7 @@ class _CartaoFormScreenState extends ConsumerState<CartaoFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nome;
   late final TextEditingController _banco;
+  late final TextEditingController _limite;
   late BandeiraCartao _bandeira;
   late int _fechamento;
   late int _pagamento;
@@ -53,6 +55,11 @@ class _CartaoFormScreenState extends ConsumerState<CartaoFormScreen> {
     final c = widget.cartao;
     _nome = TextEditingController(text: c?.nome ?? '');
     _banco = TextEditingController(text: c?.banco ?? '');
+    _limite = TextEditingController(
+      text: c?.limiteCentavos == null
+          ? ''
+          : formatMoneyInput(c!.limiteCentavos!),
+    );
     _bandeira = c?.bandeira ?? BandeiraCartao.visa;
     _fechamento = c?.diaFechamento ?? 20;
     _pagamento = c?.diaPagamento ?? 27;
@@ -62,23 +69,32 @@ class _CartaoFormScreenState extends ConsumerState<CartaoFormScreen> {
   void dispose() {
     _nome.dispose();
     _banco.dispose();
+    _limite.dispose();
     super.dispose();
+  }
+
+  /// Limite digitado em centavos (`null` = campo vazio, sem limite).
+  int? get _limiteCentavos {
+    final texto = _limite.text.trim();
+    if (texto.isEmpty) return null;
+    return parseMoneyInput(texto);
   }
 
   /// Cartão com os valores atuais do formulário (alimenta a prévia).
   CartaoCredito get _atual => CartaoCredito(
-        id: widget.cartao?.id,
-        banco: _banco.text.trim(),
-        bandeira: _bandeira,
-        nome: _nome.text.trim(),
-        diaFechamento: _fechamento,
-        diaPagamento: _pagamento,
-      );
+    id: widget.cartao?.id,
+    banco: _banco.text.trim(),
+    bandeira: _bandeira,
+    nome: _nome.text.trim(),
+    diaFechamento: _fechamento,
+    diaPagamento: _pagamento,
+    limiteCentavos: _limiteCentavos,
+  );
 
   List<DropdownMenuItem<int>> _dias() => [
-        for (var d = 1; d <= 31; d++)
-          DropdownMenuItem(value: d, child: Text(d.toString().padLeft(2, '0'))),
-      ];
+    for (var d = 1; d <= 31; d++)
+      DropdownMenuItem(value: d, child: Text(d.toString().padLeft(2, '0'))),
+  ];
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -219,6 +235,25 @@ class _CartaoFormScreenState extends ConsumerState<CartaoFormScreen> {
               validator: (v) =>
                   (v == null || v < 1 || v > 31) ? s.diaInvalido : null,
               onChanged: (v) => setState(() => _pagamento = v ?? _pagamento),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _limite,
+              decoration: InputDecoration(
+                labelText: s.limiteCartao,
+                prefixText: '${s.currencySymbol} ',
+                hintText: s.limiteCartaoHint,
+              ),
+              // Igual ao campo de valor do gasto: sem decimal no teclado, a
+              // vírgula é colocada pela máscara.
+              keyboardType: TextInputType.number,
+              inputFormatters: const [CurrencyInputFormatter()],
+              // Vazio = sem limite (opcional); preenchido precisa ser válido.
+              validator: (v) =>
+                  (v ?? '').trim().isEmpty || parseMoneyInput(v!) != null
+                  ? null
+                  : s.limiteInvalido,
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
             Row(

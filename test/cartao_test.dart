@@ -10,6 +10,7 @@ import 'package:mango/db/db.dart';
 import 'package:mango/l10n/app_locale.dart';
 import 'package:mango/l10n/app_strings.dart';
 import 'package:mango/models/models.dart';
+import 'package:mango/main.dart';
 import 'package:mango/screens/cartao_detalhe_screen.dart';
 import 'package:mango/screens/cartoes_screen.dart';
 import 'package:mango/services/notificacoes.dart';
@@ -90,12 +91,69 @@ void main() {
       expect(volta.nome, 'Viagem');
       expect(volta.diaFechamento, 20);
       expect(volta.diaPagamento, 27);
+      expect(volta.limiteCentavos, isNull);
       expect(volta.id, 1);
+    });
+
+    test(
+      'limite sobrevive a toMap/fromMap e ao copyWith (inclusive limpar)',
+      () {
+        const comLimite = CartaoCredito(
+          id: 1,
+          banco: 'Nubank',
+          bandeira: BandeiraCartao.mastercard,
+          nome: 'Viagem',
+          diaFechamento: 20,
+          diaPagamento: 27,
+          limiteCentavos: 500000,
+        );
+        expect(CartaoCredito.fromMap(comLimite.toMap()).limiteCentavos, 500000);
+        expect(comLimite.copyWith(banco: 'X').limiteCentavos, 500000);
+        expect(
+          comLimite.copyWith(limiteCentavos: 700000).limiteCentavos,
+          700000,
+        );
+        expect(comLimite.copyWith(limparLimite: true).limiteCentavos, isNull);
+      },
+    );
+
+    test('linha antiga sem a coluna carrega sem limite', () {
+      final map = _cartao.toMap()..remove('limite');
+      expect(CartaoCredito.fromMap(map).limiteCentavos, isNull);
     });
 
     test('bandeira desconhecida cai em outras', () {
       expect(BandeiraCartaoX.fromName('qualquer'), BandeiraCartao.outras);
       expect(BandeiraCartaoX.fromName(null), BandeiraCartao.outras);
+    });
+  });
+
+  group('DestinoNotificacao (toque na notificação)', () {
+    test('payload leva o id do cartão e volta igual', () {
+      const destino = DestinoNotificacao.cartao(7);
+      expect(destino.payload, 'cartao:7');
+      expect(DestinoNotificacao.parse('cartao:7')?.cartaoId, 7);
+    });
+
+    test('payload ausente ou inválido não navega (volta null)', () {
+      expect(DestinoNotificacao.parse(null), isNull);
+      expect(DestinoNotificacao.parse(''), isNull);
+      expect(DestinoNotificacao.parse('cartao:abc'), isNull);
+      expect(DestinoNotificacao.parse('cartao:0'), isNull);
+      expect(DestinoNotificacao.parse('cartao:-3'), isNull);
+      expect(DestinoNotificacao.parse('outro:7'), isNull);
+      expect(DestinoNotificacao.parse('cartao:7:extra'), isNull);
+    });
+
+    test('simularToque publica o destino; inválido é ignorado', () {
+      final servico = NotificacoesService();
+      addTearDown(servico.dispose);
+      servico.simularToque('cartao:7');
+      expect(servico.toquePendente.value?.cartaoId, 7);
+      servico.consumirToque(servico.toquePendente.value!);
+      expect(servico.toquePendente.value, isNull);
+      servico.simularToque('lixo');
+      expect(servico.toquePendente.value, isNull);
     });
   });
 
@@ -151,7 +209,9 @@ void main() {
     testWidgets('BandeiraLogo desenha para cada bandeira', (tester) async {
       for (final bandeira in BandeiraCartao.values) {
         await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: BandeiraLogo(bandeira: bandeira))),
+          MaterialApp(
+            home: Scaffold(body: BandeiraLogo(bandeira: bandeira)),
+          ),
         );
         await tester.pump();
         expect(find.byType(BandeiraLogo), findsOneWidget);
@@ -217,8 +277,39 @@ void main() {
       expect(r.cartaoPorNome.keys, ['Viagem']);
     });
 
+    test('export → import preserva o limite do cartão', () {
+      const comLimite = CartaoCredito(
+        banco: 'Nubank',
+        bandeira: BandeiraCartao.mastercard,
+        nome: 'Viagem',
+        diaFechamento: 20,
+        diaPagamento: 27,
+        limiteCentavos: 500000,
+      );
+      final csv = CsvBackup.export(const [], cartoes: const [comLimite]);
+      expect(csv, contains(';limite=500000'));
+      expect(CsvBackup.import(csv).cartoes.single.limiteCentavos, 500000);
+    });
+
+    test('linha antiga sem limite continua válida', () {
+      final r = CsvBackup.import(
+        '# CARTAO;banco=Nubank;bandeira=mastercard;nome=Viagem;fechamento=20;'
+        'pagamento=27\n${CsvBackup.header}',
+      );
+      expect(r.cartoes.single.limiteCentavos, isNull);
+    });
+
+    test('limite inválido derruba só a linha do cartão', () {
+      final r = CsvBackup.import(
+        '# CARTAO;banco=Nubank;bandeira=mastercard;nome=Viagem;fechamento=20;'
+        'pagamento=27;limite=abc\n${CsvBackup.header}',
+      );
+      expect(r.cartoes, isEmpty);
+    });
+
     test('linha de cartão inválida é ignorada sem derrubar o import', () {
-      final csv = '# CARTAO;banco=;bandeira=visa;nome=X;fechamento=40;'
+      final csv =
+          '# CARTAO;banco=;bandeira=visa;nome=X;fechamento=40;'
           'pagamento=0\n${CsvBackup.header}';
       final r = CsvBackup.import(csv);
       expect(r.cartoes, isEmpty);
@@ -333,6 +424,177 @@ void main() {
       expect(find.text('Lazer'), findsWidgets);
       expect(find.textContaining('1.234,56'), findsWidgets);
     });
+
+    testWidgets('com limite: lista mostra disponível, detalhe mostra uso', (
+      tester,
+    ) async {
+      const comLimite = CartaoCredito(
+        id: 1,
+        banco: 'Nubank',
+        bandeira: BandeiraCartao.mastercard,
+        nome: 'Viagem',
+        diaFechamento: 20,
+        diaPagamento: 27,
+        // R$ 5.000,00 de limite, R$ 1.234,56 usados → R$ 3.765,44 livres.
+        limiteCentavos: 500000,
+      );
+      final agora = DateTime.now();
+      await tester.pumpWidget(
+        _app(
+          const CartoesScreen(),
+          cartoes: const [comLimite],
+          gastos: [
+            _gasto(
+              centavos: 123456,
+              data: DateTime(agora.year, agora.month, 10, 12),
+              cartaoId: 1,
+              categoria: Category.lazer,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.textContaining('3.765,44'), findsOneWidget);
+
+      await tester.tap(find.text('Viagem'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CartaoDetalheScreen), findsOneWidget);
+      expect(find.textContaining('Disponível'), findsOneWidget);
+      expect(find.textContaining('25%'), findsOneWidget);
+    });
+
+    testWidgets('sem limite: sem barra nem disponível', (tester) async {
+      final agora = DateTime.now();
+      await tester.pumpWidget(
+        _app(
+          const CartoesScreen(),
+          cartoes: const [_cartao],
+          gastos: [
+            _gasto(
+              centavos: 123456,
+              data: DateTime(agora.year, agora.month, 10, 12),
+              cartaoId: 1,
+              categoria: Category.lazer,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.textContaining('Disponível'), findsNothing);
+    });
+  });
+
+  group('toque na notificação abre o cartão certo', () {
+    testWidgets('destravado: empilha Cartões + detalhe do cartão', (
+      tester,
+    ) async {
+      final notificacoes = NotificacoesService();
+      addTearDown(notificacoes.dispose);
+      notificacoes.simularToque('cartao:1');
+      final chave = GlobalKey<NavigatorState>();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cartoesProvider.overrideWith(
+              () => _FakeCartoesNotifier(const [_cartao]),
+            ),
+            expensesForReportsProvider.overrideWith(
+              () => _FakeReportsNotifier(const []),
+            ),
+            profileProvider.overrideWith(() => _FakeProfileNotifier()),
+            segurancaProvider.overrideWith(() => _FakeSegurancaNotifier()),
+            bloqueioProvider.overrideWith(() => _FakeBloqueioNotifier(false)),
+            notificacoesProvider.overrideWithValue(notificacoes),
+          ],
+          child: MaterialApp(
+            navigatorKey: chave,
+            home: OuvinteToqueNotificacao(
+              navigatorKey: chave,
+              child: const Scaffold(body: Text('inicial')),
+            ),
+            locale: const Locale('pt', 'BR'),
+            supportedLocales: supportedAppLocales,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CartaoDetalheScreen), findsOneWidget);
+      // O "voltar" do detalhe cai na lista de cartões, não na tela inicial.
+      expect(find.text('Viagem'), findsWidgets);
+      expect(notificacoes.toquePendente.value, isNull);
+    });
+
+    testWidgets('trancado pelo PIN: espera o desbloqueio', (tester) async {
+      final notificacoes = NotificacoesService();
+      addTearDown(notificacoes.dispose);
+      notificacoes.simularToque('cartao:1');
+      final bloqueio = _FakeBloqueioNotifier(true);
+      final chave = GlobalKey<NavigatorState>();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cartoesProvider.overrideWith(
+              () => _FakeCartoesNotifier(const [_cartao]),
+            ),
+            expensesForReportsProvider.overrideWith(
+              () => _FakeReportsNotifier(const []),
+            ),
+            profileProvider.overrideWith(() => _FakeProfileNotifier()),
+            segurancaProvider.overrideWith(
+              () => _FakeSegurancaNotifier(
+                const SegurancaConfig(
+                  pinHash: 'x',
+                  pinSalt: 'y',
+                  pinIteracoes: 1,
+                  pinTamanho: 4,
+                ),
+              ),
+            ),
+            bloqueioProvider.overrideWith(() => bloqueio),
+            notificacoesProvider.overrideWithValue(notificacoes),
+          ],
+          child: MaterialApp(
+            navigatorKey: chave,
+            home: OuvinteToqueNotificacao(
+              navigatorKey: chave,
+              child: const Scaffold(body: Text('inicial')),
+            ),
+            locale: const Locale('pt', 'BR'),
+            supportedLocales: supportedAppLocales,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Trancado: nada navega e o pendente continua guardado.
+      expect(find.byType(CartaoDetalheScreen), findsNothing);
+      expect(find.text('inicial'), findsOneWidget);
+      expect(notificacoes.toquePendente.value?.cartaoId, 1);
+
+      // Destrava: o detalhe abre sozinho.
+      bloqueio.destravar();
+      await tester.pumpAndSettle();
+      expect(find.byType(CartaoDetalheScreen), findsOneWidget);
+      expect(notificacoes.toquePendente.value, isNull);
+    });
   });
 }
 
@@ -362,26 +624,48 @@ class _FakeProfileNotifier extends ProfileNotifier {
       const UserProfile(nome: 'Ana', avatar: '🦊', corFundo: 0xFFE3F2FD);
 }
 
+class _FakeSegurancaNotifier extends SegurancaNotifier {
+  _FakeSegurancaNotifier([this._config]);
+
+  final SegurancaConfig? _config;
+
+  @override
+  Future<SegurancaConfig?> build() async => _config;
+}
+
+class _FakeBloqueioNotifier extends BloqueioNotifier {
+  _FakeBloqueioNotifier(this._travado);
+
+  bool _travado;
+
+  @override
+  bool build() => _travado;
+
+  @override
+  void destravar() {
+    _travado = false;
+    state = false;
+  }
+}
+
 Widget _app(
   Widget home, {
   List<CartaoCredito> cartoes = const [],
   List<Expense> gastos = const [],
-}) =>
-    ProviderScope(
-      overrides: [
-        cartoesProvider.overrideWith(() => _FakeCartoesNotifier(cartoes)),
-        expensesForReportsProvider
-            .overrideWith(() => _FakeReportsNotifier(gastos)),
-        profileProvider.overrideWith(() => _FakeProfileNotifier()),
-      ],
-      child: MaterialApp(
-        home: home,
-        locale: const Locale('pt', 'BR'),
-        supportedLocales: supportedAppLocales,
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-      ),
-    );
+}) => ProviderScope(
+  overrides: [
+    cartoesProvider.overrideWith(() => _FakeCartoesNotifier(cartoes)),
+    expensesForReportsProvider.overrideWith(() => _FakeReportsNotifier(gastos)),
+    profileProvider.overrideWith(() => _FakeProfileNotifier()),
+  ],
+  child: MaterialApp(
+    home: home,
+    locale: const Locale('pt', 'BR'),
+    supportedLocales: supportedAppLocales,
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+  ),
+);

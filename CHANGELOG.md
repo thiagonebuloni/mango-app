@@ -6,6 +6,22 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/) — o `+N` do
 `pubspec.yaml` é o *build number* do Android e **precisa** aumentar a cada
 release publicada.
 
+## [Não lançado]
+
+### Adicionado
+
+- Limite do cartão (opcional) no cadastro e na edição: a lista mostra a
+  barra de uso + valor disponível, e o detalhe mostra disponível + % usada.
+  Cartões antigos continuam sem limite; o limite viaja no backup CSV
+  (`;limite=`, em centavos) e linhas antigas sem ele continuam válidas.
+- Ícone do Mango nas notificações de cartão: silhueta branca na barra de
+  status + arte do app no corpo expandido (Android).
+- Toque na notificação de cartão abre o detalhe do cartão certo: cada
+  lembrete de fechamento/pagamento leva o id do cartão e o toque empilha a
+  aba de Cartões + o detalhe (o "voltar" cai na lista de cartões). Com PIN
+  ativo, o app espera o desbloqueio antes de navegar — a fatura nunca aparece
+  por cima da tranca.
+
 ## [1.2.0] - 2026-10-01
 
 ### Adicionado

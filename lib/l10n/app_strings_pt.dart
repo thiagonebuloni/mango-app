@@ -314,6 +314,12 @@ class PtBrStrings extends AppStrings {
   @override String get diaFechamento => 'Dia do fechamento';
   @override String get diaPagamento => 'Dia do pagamento';
   @override String get diaInvalido => 'Dia deve ser entre 1 e 31';
+  @override String get limiteCartao => 'Limite do cartão (opcional)';
+  @override String get limiteCartaoHint => 'Ex.: 5.000,00';
+  @override String get limiteInvalido => 'Informe um valor maior que zero';
+  @override String limiteDisponivel(String valor) => 'Disponível: $valor';
+  @override String limiteUsado(String percentual) => 'Usado: $percentual';
+  @override String get semLimite => 'Limite não informado';
   @override String get salvarCartao => 'Salvar cartão';
   @override String get cartaoSalvo => 'Cartão salvo';
   @override String get excluirCartao => 'Excluir cartão?';

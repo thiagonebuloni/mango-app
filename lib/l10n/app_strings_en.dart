@@ -313,6 +313,12 @@ class EnUsStrings extends AppStrings {
   @override String get diaFechamento => 'Closing day';
   @override String get diaPagamento => 'Payment day';
   @override String get diaInvalido => 'Day must be between 1 and 31';
+  @override String get limiteCartao => 'Card limit (optional)';
+  @override String get limiteCartaoHint => 'E.g. 5,000.00';
+  @override String get limiteInvalido => 'Enter an amount greater than zero';
+  @override String limiteDisponivel(String valor) => 'Available: $valor';
+  @override String limiteUsado(String percentual) => 'Used: $percentual';
+  @override String get semLimite => 'No limit set';
   @override String get salvarCartao => 'Save card';
   @override String get cartaoSalvo => 'Card saved';
   @override String get excluirCartao => 'Delete card?';

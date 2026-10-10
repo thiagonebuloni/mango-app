@@ -611,6 +611,10 @@ extension BandeiraCartaoX on BandeiraCartao {
 ///
 /// [diaFechamento] e [diaPagamento] são dias do mês (1..31); em meses com
 /// menos dias vale o último dia do mês (30/31 em fevereiro vira 28/29).
+///
+/// [limiteCentavos] é o limite total do cartão em centavos (`null` = não
+/// informado): serve para mostrar quanto da fatura já foi usado e quanto
+/// ainda resta no mês. Não é dado sensível do plástico.
 class CartaoCredito {
   final int? id;
 
@@ -629,6 +633,9 @@ class CartaoCredito {
   /// Dia do vencimento/pagamento da fatura (1..31).
   final int diaPagamento;
 
+  /// Limite total do cartão em centavos (`null` = não informado).
+  final int? limiteCentavos;
+
   const CartaoCredito({
     this.id,
     required this.banco,
@@ -636,6 +643,7 @@ class CartaoCredito {
     required this.nome,
     required this.diaFechamento,
     required this.diaPagamento,
+    this.limiteCentavos,
   });
 
   static CartaoCredito fromMap(Map<String, Object?> map) => CartaoCredito(
@@ -645,6 +653,7 @@ class CartaoCredito {
         nome: map['nome'] as String,
         diaFechamento: map['dia_fechamento'] as int,
         diaPagamento: map['dia_pagamento'] as int,
+        limiteCentavos: map['limite'] as int?,
       );
 
   Map<String, Object?> toMap() => {
@@ -654,6 +663,7 @@ class CartaoCredito {
         'nome': nome,
         'dia_fechamento': diaFechamento,
         'dia_pagamento': diaPagamento,
+        if (limiteCentavos != null) 'limite': limiteCentavos,
       };
 
   /// Identificador estável do cartão para o backup CSV: o `id` do banco muda
@@ -673,6 +683,8 @@ class CartaoCredito {
     String? nome,
     int? diaFechamento,
     int? diaPagamento,
+    int? limiteCentavos,
+    bool limparLimite = false,
   }) =>
       CartaoCredito(
         id: id ?? this.id,
@@ -681,11 +693,14 @@ class CartaoCredito {
         nome: nome ?? this.nome,
         diaFechamento: diaFechamento ?? this.diaFechamento,
         diaPagamento: diaPagamento ?? this.diaPagamento,
+        limiteCentavos:
+            limparLimite ? null : (limiteCentavos ?? this.limiteCentavos),
       );
 
   @override
   String toString() =>
       'CartaoCredito(id: $id, banco: $banco, bandeira: ${bandeira.name}, '
-      'nome: $nome, fechamento: $diaFechamento, pagamento: $diaPagamento)';
+      'nome: $nome, fechamento: $diaFechamento, pagamento: $diaPagamento, '
+      'limite: $limiteCentavos)';
 }
 

@@ -106,6 +106,11 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
     final agora = DateTime.now();
     final fechamento = proximoLembrete(cartao.diaFechamento, agora);
     final pagamento = proximoLembrete(cartao.diaPagamento, agora);
+    // Uso do limite no mês (`null` = limite não informado).
+    final limite = cartao.limiteCentavos;
+    final fracaoUsada = (limite == null || limite <= 0)
+        ? null
+        : (total / limite).clamp(0.0, 1.0);
 
     // Corpo em uma coluna rolável (não `ListView`): o conteúdo é curto e
     // precisa estar todo montado — inclusive o que começa abaixo da primeira
@@ -133,8 +138,9 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color:
-                          destaque == null ? null : onBackgroundColor(destaque),
+                      color: destaque == null
+                          ? null
+                          : onBackgroundColor(destaque),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -142,8 +148,9 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
                     s.totalFatura,
                     style: TextStyle(
                       fontSize: 13,
-                      color:
-                          destaque == null ? null : onBackgroundColor(destaque),
+                      color: destaque == null
+                          ? null
+                          : onBackgroundColor(destaque),
                     ),
                   ),
                   Text(
@@ -151,8 +158,9 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color:
-                          destaque == null ? null : onBackgroundColor(destaque),
+                      color: destaque == null
+                          ? null
+                          : onBackgroundColor(destaque),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -162,10 +170,34 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
                     '${s.pagamentoEm(formatDateOf(context, pagamento, (p) => p.dayMonth))}',
                     style: TextStyle(
                       fontSize: 13,
-                      color:
-                          destaque == null ? null : onBackgroundColor(destaque),
+                      color: destaque == null
+                          ? null
+                          : onBackgroundColor(destaque),
                     ),
                   ),
+                  if (fracaoUsada != null) ...[
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: fracaoUsada,
+                        minHeight: 6,
+                        backgroundColor: Colors.white.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${s.limiteDisponivel(formatMoneyOf(context, limite! - total))}'
+                      '  ·  '
+                      '${s.limiteUsado('${(fracaoUsada * 100).round()}%')}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: destaque == null
+                            ? null
+                            : onBackgroundColor(destaque),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

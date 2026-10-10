@@ -74,7 +74,8 @@ class DBHelper {
 
   /// Cartões de crédito: só o necessário para separar os gastos do mês e
   /// avisar fechamento/pagamento — nenhum dado do plástico (número, nome,
-  /// validade). Uma linha por cartão.
+  /// validade). Uma linha por cartão. v10 acrescenta o `limite` (opcional,
+  /// em centavos): bancos antigos continuam sem limite (`NULL`).
   static const _cartoesTable = '''
     CREATE TABLE cartoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +83,8 @@ class DBHelper {
       bandeira TEXT NOT NULL,
       nome TEXT NOT NULL,
       dia_fechamento INTEGER NOT NULL,
-      dia_pagamento INTEGER NOT NULL
+      dia_pagamento INTEGER NOT NULL,
+      limite INTEGER
     )
   ''';
 
@@ -98,7 +100,8 @@ class DBHelper {
   /// em `seguranca`;
   /// v9 = tabela `cartoes` + coluna `cartao_id` em `expenses` (vínculo do
   /// gasto com o cartão de crédito).
-  static const _dbVersion = 9;
+  /// v10 = coluna `limite` (opcional, em centavos) em `cartoes`.
+  static const _dbVersion = 10;
 
   Future<void> init() async {
     if (_db != null) return;
@@ -178,6 +181,15 @@ class DBHelper {
           final nomes = cols.map((c) => c['name'] as String?).toSet();
           if (!nomes.contains('cartao_id')) {
             await db.execute('ALTER TABLE expenses ADD COLUMN cartao_id INTEGER');
+          }
+        }
+        if (oldVersion < 10) {
+          // Limite do cartão (opcional): bancos existentes continuam sem
+          // limite (`NULL`) — o usuário preenche pela edição, se quiser.
+          final cols = await db.rawQuery('PRAGMA table_info(cartoes)');
+          final nomes = cols.map((c) => c['name'] as String?).toSet();
+          if (!nomes.contains('limite')) {
+            await db.execute('ALTER TABLE cartoes ADD COLUMN limite INTEGER');
           }
         }
       },
@@ -536,6 +548,11 @@ class CsvBackup {
         ..write(c.diaFechamento)
         ..write(';pagamento=')
         ..write(c.diaPagamento);
+      if (c.limiteCentavos != null) {
+        buf
+          ..write(';limite=')
+          ..write(c.limiteCentavos);
+      }
     }
     buf.write('\n$header');
     for (final e in sorted) {
@@ -709,10 +726,11 @@ class CsvBackup {
   }
 
   /// Interpreta a linha `# CARTAO;banco=...;bandeira=...;nome=...;
-  /// fechamento=..;pagamento=..`. `null` = linha não é de cartão ou está
-  /// inválida (banco/nome vazios, dias fora de 1..31, bandeira desconhecida).
-  /// Dias e nomes passam pelos mesmos limites da tela de cartão: o arquivo
-  /// pode ter sido editado à mão.
+  /// fechamento=..;pagamento=..[;limite=..]`. `null` = linha não é de cartão
+  /// ou está inválida (banco/nome vazios, dias fora de 1..31, bandeira
+  /// desconhecida). Dias e nomes passam pelos mesmos limites da tela de
+  /// cartão: o arquivo pode ter sido editado à mão. O limite é opcional —
+  /// linhas antigas (sem `limite=`) continuam válidas.
   static CartaoCredito? _parseCartaoLine(String line) {
     if (!line.startsWith(cartaoMarker)) return null;
     final resto = line.substring(cartaoMarker.length);
@@ -735,12 +753,21 @@ class CsvBackup {
         pagamento > 31) {
       return null;
     }
+    int? limite;
+    final limiteRaw = (campos['limite'] ?? '').trim();
+    if (limiteRaw.isNotEmpty) {
+      limite = int.tryParse(limiteRaw);
+      if (limite == null || limite <= 0 || limite > 1000000000000) {
+        return null;
+      }
+    }
     return CartaoCredito(
       banco: banco,
       bandeira: BandeiraCartaoX.fromName(bandeiraNome),
       nome: nome,
       diaFechamento: fechamento,
       diaPagamento: pagamento,
+      limiteCentavos: limite,
     );
   }
 

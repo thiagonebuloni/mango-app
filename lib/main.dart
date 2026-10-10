@@ -10,14 +10,21 @@ import 'package:intl/intl.dart';
 
 import 'db/db.dart';
 import 'l10n/app_locale.dart';
+import 'screens/cartao_detalhe_screen.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/lock_screen.dart';
+import 'screens/root_nav.dart';
 import 'screens/splash_screen.dart';
 import 'services/crash_log.dart';
 import 'services/notificacoes.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
+
+/// Chave global do navegador: o toque na notificação pode chegar com o app
+/// fechado ou trancado pelo PIN — sem ela não haveria `BuildContext` para
+/// abrir o cartão certo.
+final chaveNavegacaoApp = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -116,12 +123,15 @@ class MangoApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Mango',
       debugShowCheckedModeBanner: false,
+      navigatorKey: chaveNavegacaoApp,
       theme: buildAppTheme(
         corFundoDoPerfil(perfil),
         temaClaro: temaClaroDoPerfil(perfil),
         corAcento: corAcentoDoPerfil(perfil),
       ),
-      home: const LockGate(child: ProfileGate()),
+      home: OuvinteToqueNotificacao(
+        child: const LockGate(child: ProfileGate()),
+      ),
       supportedLocales: supportedAppLocales,
       locale: localeTest,
       localeResolutionCallback: (locale, supported) =>
@@ -132,6 +142,106 @@ class MangoApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
     );
+  }
+}
+
+/// Ouve o toque na notificação e abre o cartão certo.
+///
+/// O [NotificacoesService] publica o destino em `toquePendente`
+/// (`cartao:<id>`); aqui o app espera o momento seguro para navegar:
+///
+/// - com PIN trancando a tela, o toque **espera o desbloqueio** — navegar na
+///   hora mostraria a fatura por cima da tranca;
+/// - sem perfil (primeiro acesso) ou com o cartão apagado, não há para onde
+///   ir: o toque é descartado e o app abre normal.
+class OuvinteToqueNotificacao extends ConsumerStatefulWidget {
+  const OuvinteToqueNotificacao({
+    super.key,
+    required this.child,
+    this.navigatorKey,
+  });
+
+  final Widget child;
+
+  /// Chave do navegador a usar (só para teste com chave própria).
+  final GlobalKey<NavigatorState>? navigatorKey;
+
+  @override
+  ConsumerState<OuvinteToqueNotificacao> createState() =>
+      _OuvinteToqueNotificacaoState();
+}
+
+class _OuvinteToqueNotificacaoState
+    extends ConsumerState<OuvinteToqueNotificacao> {
+  late NotificacoesService _notificacoes;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificacoes = ref.read(notificacoesProvider);
+    // O toque que abriu o app fechado já está publicado: consome após o
+    // primeiro frame (com `Navigator` pronto). Os toques com o app aberto
+    // chegam pelo listener abaixo.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tentarNavegar());
+    _notificacoes.toquePendente.addListener(_tentarNavegar);
+  }
+
+  @override
+  void dispose() {
+    _notificacoes.toquePendente.removeListener(_tentarNavegar);
+    super.dispose();
+  }
+
+  void _tentarNavegar() {
+    if (!mounted) return;
+    final notificacoes = ref.read(notificacoesProvider);
+    final destino = notificacoes.toquePendente.value;
+    if (destino == null) return;
+    // Segurança ainda carregando: espera (o `build` tenta de novo quando ela
+    // resolver).
+    final seguranca = ref.read(segurancaProvider);
+    if (seguranca.isLoading) return;
+    // Com PIN ativo e trancado, o toque espera o desbloqueio — navegar na
+    // hora mostraria a fatura por cima da tranca. Sem PIN (`null`), a tranca
+    // padrão do `bloqueioProvider` não vale: o app abre direto.
+    if (seguranca.value != null && ref.read(bloqueioProvider)) return;
+    // Perfil ainda carregando: mantém o pendente e tenta de novo quando o
+    // `build` abaixo reagir ao `profileProvider`.
+    final perfil = ref.read(profileProvider);
+    if (perfil.isLoading) return;
+    // Primeiro acesso (sem perfil): não há cartão para abrir.
+    if (perfil.value == null) {
+      notificacoes.consumirToque(destino);
+      return;
+    }
+    final navigator = (widget.navigatorKey ?? chaveNavegacaoApp).currentState;
+    if (navigator == null) return;
+    notificacoes.consumirToque(destino);
+    // Empilha a aba de Cartões e o detalhe: o "voltar" do detalhe cai na
+    // lista de cartões, não na tela inicial.
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const RootNav(initialIndex: 2)),
+      (_) => false,
+    );
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => CartaoDetalheScreen(
+          cartaoId: destino.cartaoId,
+          mes: DateTime.now(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Reage ao desbloqueio e ao fim do carregamento do perfil: o toque que
+    // chegou antes da hora navega aqui.
+    ref.watch(bloqueioProvider);
+    ref.watch(profileProvider);
+    ref.watch(segurancaProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tentarNavegar());
+    return widget.child;
   }
 }
 
@@ -150,14 +260,15 @@ class ProfileGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ref.watch(profileProvider).when(
+    return ref
+        .watch(profileProvider)
+        .when(
           loading: () => const MangoSplash(),
           error: (e, _) => Scaffold(
             body: Center(child: Text(context.strings.erroPerfil('$e'))),
           ),
-          data: (perfil) => perfil == null
-              ? const FirstRunScreen()
-              : const LandingScreen(),
+          data: (perfil) =>
+              perfil == null ? const FirstRunScreen() : const LandingScreen(),
         );
   }
 }
@@ -206,12 +317,12 @@ class _LockGateState extends ConsumerState<LockGate>
 
   @override
   Widget build(BuildContext context) {
-    return ref.watch(segurancaProvider).when(
+    return ref
+        .watch(segurancaProvider)
+        .when(
           loading: () => const MangoSplash(),
           error: (e, _) => Scaffold(
-            body: Center(
-              child: Text(context.strings.erroSegurancaApp('$e')),
-            ),
+            body: Center(child: Text(context.strings.erroSegurancaApp('$e'))),
           ),
           data: (config) {
             if (config == null || !ref.watch(bloqueioProvider)) {
@@ -234,13 +345,13 @@ class _ErroAmigavel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(
-            'Esta parte da tela não pôde ser desenhada.\n'
-            'Menu → Diagnóstico mostra o detalhe da falha.',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        'Esta parte da tela não pôde ser desenhada.\n'
+        'Menu → Diagnóstico mostra o detalhe da falha.',
+        textAlign: TextAlign.center,
+      ),
+    ),
+  );
 }

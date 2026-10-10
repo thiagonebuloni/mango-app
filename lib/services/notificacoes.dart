@@ -40,15 +40,47 @@ DateTime proximoLembrete(
   throw StateError('nenhuma ocorrência futura para o dia $dia');
 }
 
+/// Destino de deep-link vindo do toque numa notificação.
+///
+/// Hoje só há lembretes de cartão (fechamento/pagamento da fatura), então o
+/// destino é sempre o detalhe de um cartão. O formato permite estender no
+/// futuro sem quebrar payloads já agendados: `cartao:<id>`.
+class DestinoNotificacao {
+  const DestinoNotificacao.cartao(this.cartaoId);
+
+  /// Id do cartão cujo detalhe deve abrir.
+  final int cartaoId;
+
+  /// Texto gravado no `payload` da notificação agendada.
+  String get payload => 'cartao:$cartaoId';
+
+  /// Lê um payload gravado por [payload]. Devolve `null` para texto ausente,
+  /// vazio ou em formato desconhecido — nesses casos o toque abre o app sem
+  /// navegar para lugar nenhum.
+  static DestinoNotificacao? parse(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final partes = raw.split(':');
+    if (partes.length != 2 || partes[0] != 'cartao') return null;
+    final id = int.tryParse(partes[1]);
+    if (id == null || id <= 0) return null;
+    return DestinoNotificacao.cartao(id);
+  }
+}
+
 /// Lembretes locais (nada de servidor — o app é offline) das datas de
 /// **fechamento** e **pagamento** da fatura de cada cartão.
 ///
 /// Toda chamada é blindada por `try/catch`: em plataforma sem suporte (web,
 /// Windows) ou sem permissão, o lembrete simplesmente não é agendado — a tela
 /// nunca quebra por causa de notificação.
+///
+/// O toque na notificação aparece em [toquePendente]: cada lembrete leva
+/// no `payload` o id do cartão (`cartao:<id>`, ver [DestinoNotificacao]), e
+/// a interface usa isso para abrir o detalhe do cartão certo. Payload
+/// ausente ou inválido não publica nada — aí o app só abre, sem navegar.
 class NotificacoesService {
   NotificacoesService({FlutterLocalNotificationsPlugin? plugin})
-      : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
 
@@ -60,6 +92,21 @@ class NotificacoesService {
 
   static const String canalCartoes = 'cartoes';
 
+  /// Último destino tocado e ainda não consumido pela interface.
+  ///
+  /// Vira um [ValueNotifier] (e não um callback direto) por dois motivos:
+  /// o toque pode chegar com o app fechado — antes de existir `Navigator` —
+  /// e pode chegar com o PIN trancando a tela — aí navegar na hora furaria
+  /// o bloqueio. A interface observa, espera estar destravada e só então
+  /// consome com [consumirToque].
+  final ValueNotifier<DestinoNotificacao?> toquePendente =
+      ValueNotifier<DestinoNotificacao?>(null);
+
+  /// Marca um toque como consumido (chamado pela interface após navegar).
+  void consumirToque(DestinoNotificacao destino) {
+    if (toquePendente.value == destino) toquePendente.value = null;
+  }
+
   AppStrings get _s => AppStrings.of(_locale);
 
   /// Id fixo por cartão e evento: reagendar substitui o alarme anterior em
@@ -69,6 +116,11 @@ class NotificacoesService {
   static int _idPagamento(int cartaoId) => 1000000 + cartaoId * 10 + 2;
 
   /// Prepara o plugin e o fuso horário. [locale] define o idioma dos avisos.
+  ///
+  /// Registra o toque ([onDidReceiveNotificationResponse]) publicando o
+  /// destino em [toquePendente], e lê o toque que abriu o app fechado
+  /// ([getNotificationAppLaunchDetails]) para o mesmo lugar — a interface
+  /// consome quando já dá para navegar.
   Future<void> inicializar(Locale locale) async {
     _locale = locale;
     if (kIsWeb) return;
@@ -81,7 +133,16 @@ class NotificacoesService {
           macOS: DarwinInitializationSettings(),
           linux: LinuxInitializationSettings(defaultActionName: 'Abrir'),
         ),
+        onDidReceiveNotificationResponse: (resposta) {
+          final destino = DestinoNotificacao.parse(resposta.payload);
+          if (destino != null) toquePendente.value = destino;
+        },
       );
+      final lancamento = await _plugin.getNotificationAppLaunchDetails();
+      final destino = DestinoNotificacao.parse(
+        lancamento?.notificationResponse?.payload,
+      );
+      if (destino != null) toquePendente.value = destino;
       _inicializado = true;
     } catch (e) {
       debugPrint('notificações indisponíveis: $e');
@@ -106,17 +167,25 @@ class NotificacoesService {
   }
 
   NotificationDetails get _detalhes => const NotificationDetails(
-        android: AndroidNotificationDetails(
-          canalCartoes,
-          'Cartões de crédito',
-          channelDescription:
-              'Lembretes de fechamento e pagamento da fatura de cartão',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-        macOS: DarwinNotificationDetails(),
-      );
+    android: AndroidNotificationDetails(
+      canalCartoes,
+      'Cartões de crédito',
+      channelDescription:
+          'Lembretes de fechamento e pagamento da fatura de cartão',
+      importance: Importance.high,
+      priority: Priority.high,
+      // Barra de status: silhueta branca da manga (`res/drawable`
+      // `ic_notificacao.xml`) — o Android tinge o small icon de
+      // monocromático, então o launcher colorido viraria ilegível.
+      // Corpo expandido: arte do app em 192dp (`ic_notificacao_grande.png`,
+      // gerado de `assets/icon/app_icon_master.png` via
+      // `flutter test tool/gerar_icone_notificacao.dart`).
+      icon: 'ic_notificacao',
+      largeIcon: DrawableResourceAndroidBitmap('ic_notificacao_grande'),
+    ),
+    iOS: DarwinNotificationDetails(),
+    macOS: DarwinNotificationDetails(),
+  );
 
   /// Pede a permissão de notificação (Android 13+, iOS). Ocorre no momento do
   /// cadastro do cartão, quando o motivo está claro na tela.
@@ -126,13 +195,15 @@ class NotificacoesService {
       if (defaultTargetPlatform == TargetPlatform.android) {
         await _plugin
             .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
+              AndroidFlutterLocalNotificationsPlugin
+            >()
             ?.requestNotificationsPermission();
       } else if (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS) {
         await _plugin
             .resolvePlatformSpecificImplementation<
-                IOSFlutterLocalNotificationsPlugin>()
+              IOSFlutterLocalNotificationsPlugin
+            >()
             ?.requestPermissions(alert: true, badge: true, sound: true);
       }
     } catch (e) {
@@ -142,6 +213,8 @@ class NotificacoesService {
 
   /// Agenda (ou reagenda) os lembretes de fechamento e pagamento de [cartao]
   /// para a próxima ocorrência de cada data.
+  ///
+  /// O `payload` leva o id do cartão: o toque abre o detalhe dele.
   Future<void> agendarLembretes(CartaoCredito cartao) async {
     final id = cartao.id;
     if (!_inicializado || id == null) return;
@@ -149,6 +222,7 @@ class NotificacoesService {
     try {
       await _cancelarIds(id);
       final s = _s;
+      final payload = DestinoNotificacao.cartao(id).payload;
       await _plugin.zonedSchedule(
         _idFechamento(id),
         s.fechamentoFatura,
@@ -156,6 +230,7 @@ class NotificacoesService {
         _tz(proximoLembrete(cartao.diaFechamento, agora)),
         _detalhes,
         androidScheduleMode: AndroidScheduleMode.inexact,
+        payload: payload,
       );
       await _plugin.zonedSchedule(
         _idPagamento(id),
@@ -164,6 +239,7 @@ class NotificacoesService {
         _tz(proximoLembrete(cartao.diaPagamento, agora)),
         _detalhes,
         androidScheduleMode: AndroidScheduleMode.inexact,
+        payload: payload,
       );
     } catch (e) {
       debugPrint('lembretes do cartão não agendados: $e');
@@ -192,6 +268,20 @@ class NotificacoesService {
     await _plugin.cancel(_idFechamento(cartaoId));
     await _plugin.cancel(_idPagamento(cartaoId));
   }
+
+  /// Simula o toque numa notificação com [payload] (só para teste).
+  ///
+  /// Replica o que o `onDidReceiveNotificationResponse` do [inicializar] faz
+  /// com um toque real: publica o destino em [toquePendente], ou ignora
+  /// quando o payload é inválido.
+  @visibleForTesting
+  void simularToque(String? payload) {
+    final destino = DestinoNotificacao.parse(payload);
+    if (destino != null) toquePendente.value = destino;
+  }
+
+  /// Libera o [toquePendente] (só para teste).
+  void dispose() => toquePendente.dispose();
 
   tz.TZDateTime _tz(DateTime d) =>
       tz.TZDateTime(tz.local, d.year, d.month, d.day, d.hour, d.minute);
