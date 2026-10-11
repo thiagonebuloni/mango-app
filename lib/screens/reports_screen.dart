@@ -10,6 +10,16 @@ import '../models/models.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'expense_form_screen.dart';
+
+/// Abre a edição do gasto — mesmo caminho do toque na lista da tela de
+/// Gastos. Usado pelos cartões que organizam lançamentos (por dia, por
+/// categoria e por forma de pagamento) para dar acesso rápido ao indivíduo.
+void _abrirEdicaoGasto(BuildContext context, Expense expense) {
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => ExpenseFormScreen(expense: expense)),
+  );
+}
 
 /// Relatorio por periodo, categoria e forma de pagamento.
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -560,7 +570,11 @@ class DaySummaryCard extends StatelessWidget {
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, fontSize: 15)),
               children: [
-                for (final e in dayExpenses) ExpenseTile(expense: e),
+                for (final e in dayExpenses)
+                  ExpenseTile(
+                    expense: e,
+                    onTap: () => _abrirEdicaoGasto(context, e),
+                  ),
               ],
             );
           }),
@@ -691,7 +705,10 @@ class _PaymentCard extends StatelessWidget {
                   Localizations.localeOf(context))),
               children: [
                 for (final e in _expensesOf(entry.key))
-                  ExpenseTile(expense: e),
+                  ExpenseTile(
+                    expense: e,
+                    onTap: () => _abrirEdicaoGasto(context, e),
+                  ),
               ],
             ),
         ],

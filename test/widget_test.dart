@@ -426,6 +426,63 @@ void main() async {
       // "qui., 24/09 (3)": a data vem seguida da contagem de lançamentos.
       expect(find.textContaining('(3)'), findsOneWidget);
     });
+
+    testWidgets('tocar num gasto do cartão "por dia" abre a edição',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier([_gasto(0)])),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Abre o dia para revelar os lançamentos e toca em um deles.
+      final dia = find.byType(ExpansionTile).first;
+      await tester.ensureVisible(dia);
+      await tester.pumpAndSettle();
+      await tester.tap(dia);
+      await tester.pumpAndSettle();
+      final gasto = find.text('MERCADO TESTE 0');
+      await tester.ensureVisible(gasto);
+      await tester.pumpAndSettle();
+      await tester.tap(gasto);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ExpenseFormScreen), findsOneWidget);
+    });
+
+    testWidgets('tocar num gasto do cartão "por forma de pagamento" abre a edição',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier([_gasto(0)])),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Por dia vem primeiro na lista; o último ExpansionTile é a forma de
+      // pagamento do gasto (dinheiro).
+      final pagamento = find.byType(ExpansionTile).last;
+      await tester.ensureVisible(pagamento);
+      await tester.pumpAndSettle();
+      await tester.tap(pagamento);
+      await tester.pumpAndSettle();
+      final gasto = find.text('MERCADO TESTE 0');
+      await tester.ensureVisible(gasto);
+      await tester.pumpAndSettle();
+      await tester.tap(gasto);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ExpenseFormScreen), findsOneWidget);
+    });
   });
 
   group('ReportsScreen (barra de períodos)', () {
