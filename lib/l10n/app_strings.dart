@@ -309,6 +309,7 @@ abstract class AppStrings {
   String get limiteInvalido;
   String limiteDisponivel(String valor);
   String limiteUsado(String percentual);
+  String limiteExcedido(String valor);
   String get semLimite;
   String get salvarCartao;
   String get cartaoSalvo;

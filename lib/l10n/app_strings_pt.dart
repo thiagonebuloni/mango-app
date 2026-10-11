@@ -318,6 +318,7 @@ class PtBrStrings extends AppStrings {
   @override String get limiteInvalido => 'Informe um valor maior que zero';
   @override String limiteDisponivel(String valor) => 'Disponível: $valor';
   @override String limiteUsado(String percentual) => 'Usado: $percentual';
+  @override String limiteExcedido(String valor) => 'Limite excedido em $valor';
   @override String get semLimite => 'Limite não informado';
   @override String get salvarCartao => 'Salvar cartão';
   @override String get cartaoSalvo => 'Cartão salvo';

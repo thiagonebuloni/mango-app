@@ -111,6 +111,8 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
     final fracaoUsada = (limite == null || limite <= 0)
         ? null
         : (total / limite).clamp(0.0, 1.0);
+    // Passou do limite? Só alerta visual: nada impede lançar mais gastos.
+    final excedeu = limite != null && limite > 0 && total > limite;
 
     // Corpo em uma coluna rolável (não `ListView`): o conteúdo é curto e
     // precisa estar todo montado — inclusive o que começa abaixo da primeira
@@ -183,20 +185,41 @@ class _CartaoDetalheScreenState extends ConsumerState<CartaoDetalheScreen> {
                         value: fracaoUsada,
                         minHeight: 6,
                         backgroundColor: Colors.white.withValues(alpha: 0.35),
+                        color: excedeu ? Colors.red.shade400 : null,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${s.limiteDisponivel(formatMoneyOf(context, limite! - total))}'
-                      '  ·  '
-                      '${s.limiteUsado('${(fracaoUsada * 100).round()}%')}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: destaque == null
-                            ? null
-                            : onBackgroundColor(destaque),
+                    if (excedeu)
+                      Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 16, color: Colors.red.shade400),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              s.limiteExcedido(
+                                  formatMoneyOf(context, total - limite)),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.red.shade400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        '${s.limiteDisponivel(formatMoneyOf(context, limite! - total))}'
+                        '  ·  '
+                        '${s.limiteUsado('${(fracaoUsada * 100).round()}%')}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: destaque == null
+                              ? null
+                              : onBackgroundColor(destaque),
+                        ),
                       ),
-                    ),
                   ],
                 ],
               ),

@@ -206,6 +206,9 @@ class _CartaoComTotal extends StatelessWidget {
     final fracaoUsada = (limite == null || limite <= 0)
         ? null
         : (total / limite).clamp(0.0, 1.0);
+    // Passou do limite? É só um alerta visual: nada impede lançar mais
+    // gastos no cartão — barra e texto é que ficam vermelhos.
+    final excedeu = limite != null && limite > 0 && total > limite;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -244,15 +247,38 @@ class _CartaoComTotal extends StatelessWidget {
                             child: LinearProgressIndicator(
                               value: fracaoUsada,
                               minHeight: 6,
+                              color: excedeu ? Colors.red.shade400 : null,
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            s.limiteDisponivel(
-                              formatMoneyOf(context, limite! - total),
+                          if (excedeu)
+                            Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    size: 16, color: Colors.red.shade400),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    s.limiteExcedido(formatMoneyOf(
+                                        context, total - limite)),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.red.shade400,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Text(
+                              s.limiteDisponivel(
+                                formatMoneyOf(context, limite! - total),
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
                         ],
                       ],
                     ),

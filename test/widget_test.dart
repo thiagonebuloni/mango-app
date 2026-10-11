@@ -18,6 +18,7 @@ import 'package:mango/main.dart';
 import 'package:mango/l10n/app_locale.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/screens/capture_screen.dart';
+import 'package:mango/screens/cartao_detalhe_screen.dart';
 import 'package:mango/screens/cartoes_screen.dart';
 import 'package:mango/screens/diagnostico_screen.dart';
 import 'package:mango/screens/expense_form_screen.dart';
@@ -93,8 +94,12 @@ class _FakeReportsNotifier extends ExpensesForReports {
 }
 
 class _FakeCartoesNotifier extends CartoesNotifier {
+  _FakeCartoesNotifier([this._cartoes = const []]);
+
+  final List<CartaoCredito> _cartoes;
+
   @override
-  Future<List<CartaoCredito>> build() async => const [];
+  Future<List<CartaoCredito>> build() async => _cartoes;
 }
 
 /// Rola a edição de perfil até o botão "Salvar" ficar tocável.
@@ -482,6 +487,100 @@ void main() async {
       await tester.pumpAndSettle();
 
       expect(find.byType(ExpenseFormScreen), findsOneWidget);
+    });
+  });
+
+  group('Cartões: limite excedido (só visual, avisa em vermelho)', () {
+    CartaoCredito cartaoComLimite(int limiteCentavos) => CartaoCredito(
+          id: 1,
+          banco: 'Nubank',
+          bandeira: BandeiraCartao.visa,
+          nome: 'Personalizado',
+          diaFechamento: 20,
+          diaPagamento: 27,
+          limiteCentavos: limiteCentavos,
+        );
+
+    /// Gasto de hoje no cartão 1 (fatura do mês atual).
+    Expense gastoNoCartao(int centavos) {
+      final now = DateTime.now();
+      return Expense(
+        valorCentavos: centavos,
+        dataHora: DateTime(now.year, now.month, now.day, 12),
+        categoria: Category.mercado,
+        forma: PaymentMethod.credito,
+        cartaoId: 1,
+        estabelecimento: 'MERCADO TESTE',
+      );
+    }
+
+    // `flutter_riverpod` (Riverpod 3) não exporta o tipo `Override`, então a
+    // lista de substituições sai com o tipo inferido pelo corpo.
+    criarOverrides({required int limiteCentavos}) => [
+          expensesForReportsProvider
+              .overrideWith(() => _FakeReportsNotifier([gastoNoCartao(1000)])),
+          cartoesProvider.overrideWith(
+              () => _FakeCartoesNotifier([cartaoComLimite(limiteCentavos)])),
+        ];
+
+    testWidgets(
+        'lista de cartões: fatura acima do limite mostra aviso vermelho',
+        (tester) async {
+      // Fatura R$ 10,00 com limite R$ 5,00 → excede em R$ 5,00.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: criarOverrides(limiteCentavos: 500),
+          child: _makeApp(home: const CartoesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Limite excedido em R\$\u00A05,00'), findsOneWidget);
+      final barra = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator));
+      expect(barra.color, Colors.red.shade400,
+          reason: 'a barra do limite deve ficar vermelha ao exceder');
+    });
+
+    testWidgets(
+        'detalhe do cartão: fatura acima do limite mostra aviso vermelho',
+        (tester) async {
+      final agora = DateTime.now();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: criarOverrides(limiteCentavos: 500),
+          child: _makeApp(
+            home: CartaoDetalheScreen(
+              cartaoId: 1,
+              mes: DateTime(agora.year, agora.month),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Limite excedido em R\$\u00A05,00'), findsOneWidget);
+      final barra = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator));
+      expect(barra.color, Colors.red.shade400);
+    });
+
+    testWidgets('dentro do limite não mostra aviso (fica "Disponível")',
+        (tester) async {
+      // Fatura R$ 10,00 com limite R$ 50,00 → nada de aviso.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: criarOverrides(limiteCentavos: 5000),
+          child: _makeApp(home: const CartoesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Limite excedido'), findsNothing);
+      expect(find.text('Disponível: R\$\u00A040,00'), findsOneWidget);
+      final barra = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator));
+      expect(barra.color, isNull);
     });
   });
 

@@ -317,6 +317,7 @@ class EnUsStrings extends AppStrings {
   @override String get limiteInvalido => 'Enter an amount greater than zero';
   @override String limiteDisponivel(String valor) => 'Available: $valor';
   @override String limiteUsado(String percentual) => 'Used: $percentual';
+  @override String limiteExcedido(String valor) => 'Limit exceeded by $valor';
   @override String get semLimite => 'No limit set';
   @override String get salvarCartao => 'Save card';
   @override String get cartaoSalvo => 'Card saved';
