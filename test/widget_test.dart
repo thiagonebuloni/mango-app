@@ -16,6 +16,7 @@ import 'package:path/path.dart' as p;
 import 'package:mango/db/db.dart';
 import 'package:mango/main.dart';
 import 'package:mango/l10n/app_locale.dart';
+import 'package:mango/l10n/l10n_format.dart';
 import 'package:mango/models/models.dart';
 import 'package:mango/screens/capture_screen.dart';
 import 'package:mango/screens/cartao_detalhe_screen.dart';
@@ -429,6 +430,11 @@ void main() async {
       await tester.pumpAndSettle();
 
       // "qui., 24/09 (3)": a data vem seguida da contagem de lançamentos.
+      // O cartão de dias vem após o gráfico e pode nascer fora da janela
+      // de construção da ListView (a tela ganhou a linha das setas de
+      // mês): rola até ele.
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
       expect(find.textContaining('(3)'), findsOneWidget);
     });
 
@@ -445,7 +451,11 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
-      // Abre o dia para revelar os lançamentos e toca em um deles.
+      // Abre o dia para revelar os lançamentos e toca em um deles. O
+      // cartão de dias pode estar fora da janela de construção da
+      // ListView: rola até ele aparecer.
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
       final dia = find.byType(ExpansionTile).first;
       await tester.ensureVisible(dia);
       await tester.pumpAndSettle();
@@ -474,7 +484,10 @@ void main() async {
       await tester.pumpAndSettle();
 
       // Por dia vem primeiro na lista; o último ExpansionTile é a forma de
-      // pagamento do gasto (dinheiro).
+      // pagamento do gasto (dinheiro). Rola até o fim da ListView para o
+      // cartão de pagamentos existir na árvore antes de pegar o último.
+      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.pumpAndSettle();
       final pagamento = find.byType(ExpansionTile).last;
       await tester.ensureVisible(pagamento);
       await tester.pumpAndSettle();
@@ -601,12 +614,24 @@ void main() async {
       expect(find.text('Despesas x Receitas'), findsOneWidget);
       // Barras do gráfico: uma para despesas, uma para receitas.
       expect(find.byType(BarChart), findsOneWidget);
+      // O cartão "Gastos por dia" vem após o gráfico e pode nascer fora
+      // da janela de construção da ListView: rola até ele existir.
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
       // Valores por extenso na legenda, abaixo das barras (o rótulo aparece
       // 2x: título do eixo do gráfico + legenda com o valor).
       expect(find.text('Despesas'), findsNWidgets(2));
       expect(find.text('Receitas'), findsNWidgets(2));
-      // O valor aparece 2x: legenda do gráfico + cartão "Gastos por dia".
-      expect(find.text('R\$ 10,00'), findsNWidgets(2));
+      // O valor aparece na legenda do gráfico e no cabeçalho do dia do
+      // cartão "Gastos por dia" (o finder do total fica escopo ao card:
+      // a rolagem pode trazer categoria/pagamento para a janela, e eles
+      // repetem o mesmo valor).
+      expect(
+        find.descendant(
+            of: find.byType(DaySummaryCard), matching: find.text('R\$ 10,00')),
+        findsOneWidget,
+      );
+      expect(find.text('R\$ 10,00'), findsWidgets);
       expect(find.text('R\$ 50,00'), findsOneWidget);
       // Saldo = receitas − despesas, positivo usa "+" em verde.
       expect(find.text('Saldo'), findsOneWidget);
@@ -694,6 +719,59 @@ void main() async {
         moreOrLessEquals(screenWidth / 2, epsilon: 1),
         reason: 'a barra de períodos deve ficar centralizada',
       );
+    });
+
+    testWidgets('setas navegam pelos meses como na tela de Gastos',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            expensesForReportsProvider
+                .overrideWith(() => _FakeReportsNotifier()),
+          ],
+          child: _makeApp(home: const ReportsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Mesmo título de mês da tela de Gastos ("Outubro 2026").
+      String titulo(DateTime m) {
+        final label =
+            formatDate(m, (p) => p.monthYear, const Locale('pt', 'BR'));
+        return '${label[0].toUpperCase()}${label.substring(1)}';
+      }
+
+      // Abre no mês corrente.
+      final agora = DateTime.now();
+      expect(find.text(titulo(DateTime(agora.year, agora.month))),
+          findsOneWidget);
+
+      // Seta esquerda mostra o mês anterior, com o mês inteiro na faixa.
+      await tester.tap(find.byIcon(Icons.chevron_left));
+      await tester.pumpAndSettle();
+      final anterior = DateTime(agora.year, agora.month - 1);
+      expect(find.text(titulo(anterior)), findsOneWidget);
+      final fmt = DateFormat('dd/MM/yyyy', 'pt_BR');
+      expect(
+        find.text(
+            '${fmt.format(DateTime(anterior.year, anterior.month))} — '
+            '${fmt.format(DateTime(anterior.year, anterior.month + 1, 0))}'),
+        findsOneWidget,
+      );
+
+      // Seta direita volta ao corrente, onde fica desligada: não existe
+      // mês futuro a mostrar.
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pumpAndSettle();
+      expect(find.text(titulo(DateTime(agora.year, agora.month))),
+          findsOneWidget);
+      final setaDireita = tester.widget<IconButton>(
+        find.ancestor(
+            of: find.byIcon(Icons.chevron_right),
+            matching: find.byType(IconButton)),
+      );
+      expect(setaDireita.onPressed, isNull,
+          reason: 'a seta direita desliga no mês corrente');
     });
   });
 

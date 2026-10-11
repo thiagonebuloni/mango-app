@@ -49,8 +49,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final now = DateTime.now();
     switch (_period) {
       case _Period.mes:
-        final m0 = DateTime(now.year, now.month);
-        return PeriodRange(start: m0, end: now);
+        // Mês escolhido pelas setas (abre no corrente). Corrente: até
+        // agora; passado: o mês inteiro.
+        final mes = ref.read(mesRelatoriosProvider);
+        final ehMesAtual = mes.year == now.year && mes.month == now.month;
+        return PeriodRange(
+          start: mes,
+          end: ehMesAtual ? now : DateTime(mes.year, mes.month + 1, 0),
+        );
       case _Period.ultimos30:
         final start = Periods.startOfDay(now).subtract(const Duration(days: 29));
         return PeriodRange(start: start, end: now);
@@ -87,14 +93,23 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   void _invalidate() => ref.invalidate(expensesForReportsProvider);
 
+  /// Título "Outubro 2026" do mês em exibição — mesmo formato da tela
+  /// de Gastos.
+  String _monthTitle(DateTime mes) {
+    final label = formatDate(
+        mes, (p) => p.monthYear, Localizations.maybeLocaleOf(context));
+    return '${label[0].toUpperCase()}${label.substring(1)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesForReportsProvider);
     final destaque = corDestaqueDoPerfil(ref.watch(profileProvider).value);
-    // Rótulo do filtro de mês: abreviatura do mês corrente no locale do
+    // Mês em exibição (setas): observá-lo reconstrói a tela ao navegar.
+    final mesVisivel = ref.watch(mesRelatoriosProvider);
+    // Rótulo do filtro de mês: abreviatura do mês exibido no locale do
     // app ("out." em pt_BR, "Oct" em en_US) em vez de um texto fixo.
-    final mesAbrev =
-        DateFormat('MMM', intlOf(context)).format(DateTime.now());
+    final mesAbrev = DateFormat('MMM', intlOf(context)).format(mesVisivel);
     final periodLabels = <String>[
       mesAbrev,
       context.strings.periodo30,
@@ -213,6 +228,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                // Navegação por setas no filtro de mês — mesmo padrão da
+                // tela de Gastos: setas nas pontas e o nome do mês no
+                // meio. Só aparece no filtro de mês; os outros filtros são
+                // intervalos fixos (30 dias, ano, custom) sem mês a passar.
+                if (_period == _Period.mes)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        tooltip: context.strings.mesAnterior,
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: () => ref
+                            .read(mesRelatoriosProvider.notifier)
+                            .mudarPor(-1),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _monthTitle(mesVisivel),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: context.strings.proximoMes,
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed:
+                            ref.read(mesRelatoriosProvider.notifier).eMesAtual
+                                ? null
+                                : () => ref
+                                    .read(mesRelatoriosProvider.notifier)
+                                    .mudarPor(1),
+                      ),
+                    ],
+                  ),
                 Center(
                   child: Text(
                     '${formatDate(pr.start, (p) => p.dayMonthYear)} — '

@@ -566,9 +566,10 @@ class PeriodRange {
 /// Mês mostrado por uma tela com seletor de mês (sempre dia 1).
 ///
 /// Cada tela guarda o seu em um provedor próprio ([mesGastosProvider] na tela
-/// Gastos e [mesCartoesProvider] na tela Cartões): trocar o mês de uma não
-/// mexe no da outra. O estado vive no `ProviderScope`, acima da navegação —
-/// trocar de aba, sair para outra tela e voltar mantêm o período escolhido.
+/// Gastos, [mesCartoesProvider] na tela Cartões e [mesRelatoriosProvider] na
+/// tela Relatórios): trocar o mês de uma não mexe no da outra. O estado vive
+/// no `ProviderScope`, acima da navegação — trocar de aba, sair para outra
+/// tela e voltar mantêm o período escolhido.
 class MesVisivelNotifier extends Notifier<DateTime> {
   @override
   DateTime build() => Periods.startOfMonth(DateTime.now());
@@ -595,6 +596,11 @@ final mesGastosProvider = NotifierProvider<MesVisivelNotifier, DateTime>(
 
 /// Mês em exibição na tela **Cartões** — independente do de Gastos.
 final mesCartoesProvider = NotifierProvider<MesVisivelNotifier, DateTime>(
+  MesVisivelNotifier.new,
+);
+
+/// Mês em exibição na tela **Relatórios** — independente das demais.
+final mesRelatoriosProvider = NotifierProvider<MesVisivelNotifier, DateTime>(
   MesVisivelNotifier.new,
 );
 
