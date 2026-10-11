@@ -81,6 +81,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesForReportsProvider);
     final destaque = corDestaqueDoPerfil(ref.watch(profileProvider).value);
+    // Rótulo do filtro de mês: abreviatura do mês corrente no locale do
+    // app ("out." em pt_BR, "Oct" em en_US) em vez de um texto fixo.
+    final mesAbrev =
+        DateFormat('MMM', intlOf(context)).format(DateTime.now());
+    final periodLabels = <String>[
+      mesAbrev,
+      context.strings.periodo30,
+      context.strings.periodoAno,
+      context.strings.periodoCustom,
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -175,26 +185,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               Theme.of(context).colorScheme.primary)
                           .withValues(alpha: 0.15),
                       children: [
-                        Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(context.strings.periodoMes),
-                        ),
-                        Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(context.strings.periodo30),
-                        ),
-                        Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(context.strings.periodoAno),
-                        ),
-                        Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(context.strings.periodoCustom),
-                        ),
+                        // Cada rótulo fica centralizado no próprio botão:
+                        // o Padding simétrico define o "respiro" e o
+                        // TextAlign.center garante o meio mesmo com
+                        // rótulos de larguras bem diferentes (ex.:
+                        // "out." x "Últimos 30 dias"), sem desalinhar os
+                        // demais botões.
+                        for (final label in periodLabels)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16),
+                            child: Text(label,
+                                textAlign: TextAlign.center),
+                          ),
                       ],
                     ),
                   ),

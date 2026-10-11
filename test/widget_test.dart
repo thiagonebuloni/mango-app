@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:mango/db/db.dart';
@@ -491,7 +492,7 @@ void main() async {
       expect(find.byType(BarChart), findsOneWidget);
     });
 
-    testWidgets('botões Mês/30 dias/Ano/Custom ficam centralizados',
+    testWidgets('botões mês abreviado/Últimos 30 dias/Ano/Custom centralizados',
         (tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -504,8 +505,25 @@ void main() async {
       );
       await tester.pumpAndSettle();
 
-      for (final label in ['Mês', '30 dias', 'Ano', 'Custom']) {
+      // O filtro de mês mostra a abreviatura do mês corrente em pt_BR
+      // (ex.: "out." no mês 10), não o texto fixo "Mês".
+      final mesAbrev = DateFormat('MMM', 'pt_BR').format(DateTime.now());
+      final labels = [mesAbrev, 'Últimos 30 dias', 'Ano', 'Custom'];
+      for (final label in labels) {
         expect(find.text(label), findsOneWidget);
+      }
+
+      // O rótulo de cada botão fica centralizado dentro dele.
+      for (final label in labels) {
+        final texto = find.text(label);
+        final botao = find.ancestor(
+            of: texto, matching: find.byType(TextButton));
+        final centroTexto = tester.getCenter(texto);
+        final centroBotao = tester.getCenter(botao);
+        expect(centroTexto.dx, moreOrLessEquals(centroBotao.dx, epsilon: 1),
+            reason: 'o rótulo "$label" deve ficar centralizado no botão');
+        expect(centroTexto.dy, moreOrLessEquals(centroBotao.dy, epsilon: 1),
+            reason: 'o rótulo "$label" deve ficar centralizado no botão');
       }
 
       final screenWidth = tester.getSize(find.byType(Scaffold)).width;

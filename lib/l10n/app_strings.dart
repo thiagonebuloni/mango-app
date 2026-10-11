@@ -133,7 +133,6 @@ abstract class AppStrings {
   String imagemGrandeMsg(String atual, String max);
   String get cupomIlegivel;
   String falhaLerCupom(String e);
-  String get periodoMes;
   String get periodo30;
   String get periodoAno;
   String get periodoCustom;

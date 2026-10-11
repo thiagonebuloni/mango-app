@@ -114,8 +114,7 @@ class EnUsStrings extends AppStrings {
   @override String imagemGrandeMsg(String a, String m) => 'Image too large ($a MB, max $m MB).';
   @override String get cupomIlegivel => 'Could not read the receipt. Try a sharper photo.';
   @override String falhaLerCupom(String e) => 'Failed to read receipt: $e';
-  @override String get periodoMes => 'Month';
-  @override String get periodo30 => '30 days';
+  @override String get periodo30 => 'Last 30 days';
   @override String get periodoAno => 'Year';
   @override String get periodoCustom => 'Custom';
   @override String get semDados => 'No data to display.';

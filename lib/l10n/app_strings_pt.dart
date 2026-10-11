@@ -114,8 +114,7 @@ class PtBrStrings extends AppStrings {
   @override String imagemGrandeMsg(String a, String m) => 'A imagem é grande demais ($a MB, máximo $m MB). Tire uma foto do cupom ou escolha uma imagem menor.';
   @override String get cupomIlegivel => 'Não foi possível ler o cupom. Tente uma foto mais nítida.';
   @override String falhaLerCupom(String e) => 'Falha ao ler o cupom: $e';
-  @override String get periodoMes => 'Mês';
-  @override String get periodo30 => '30 dias';
+  @override String get periodo30 => 'Últimos 30 dias';
   @override String get periodoAno => 'Ano';
   @override String get periodoCustom => 'Custom';
   @override String get semDados => 'Sem dados para visualização.';

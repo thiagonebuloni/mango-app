@@ -138,7 +138,7 @@ flutter run -d <device_id> # escolher dispositivo específico
 Dentro do app, botão **+** → "Foto do cupom fiscal" (câmera/galeria) ou
 "Lançamento manual". Aba **Relatórios** mostra gráfico de barras despesas
 x receitas do período, total do período, gráfico por categoria e por forma
-de pagamento (mês / 30 dias / ano / intervalo custom).
+de pagamento (mês corrente / últimos 30 dias / ano / intervalo custom).
 
 ## Backup, privacidade e onde ficam os dados
 
