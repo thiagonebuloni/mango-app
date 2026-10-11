@@ -22,7 +22,7 @@ release publicada.
   ativo, o app espera o desbloqueio antes de navegar — a fatura nunca aparece
   por cima da tranca.
 
-## [1.2.0] - 2026-10-01
+## [1.4.0] - 2026-10-01
 
 ### Adicionado
 
