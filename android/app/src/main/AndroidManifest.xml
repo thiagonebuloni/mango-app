@@ -35,10 +35,16 @@
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- Instância única: o Android mantém uma só activity/task do app.
+             Toque no ícone, em lembrete ou atalho reusa a instância já
+             aberta (o intent entra por onNewIntent, que o Flutter repassa
+             ao Dart) — inclusive logo após atualizar o APK, já que a
+             instalação substitui mata o processo anterior. Com "singleTop"
+             um lançamento fora do topo da task criaria uma segunda cópia. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
