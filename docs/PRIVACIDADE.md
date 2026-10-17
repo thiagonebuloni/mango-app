@@ -52,6 +52,13 @@ lugar nenhum.
   app recebe apenas "deu certo" ou "não deu certo" — nenhum dado biométrico é
   lido, guardado ou compartilhado pelo Mango. O PIN do app, quando existe, é
   guardado no banco local como hash (PBKDF2 + sal aleatório), nunca em claro.
+- **Relatório por I.A. (opcional):** roda inteiramente no aparelho, com um
+  modelo de I.A. (arquivo `.litertlm`) que você instala pela pasta do app
+  (`tool/install_modelo_ia.sh`, sem internet). Os números usados e o texto
+  gerado não são enviados a lugar nenhum; compartilhar o relatório é uma
+  ação sua, pela folha de compartilhamento do sistema. Uma marca local de
+  "geração em andamento" existe só para registrar no *Diagnóstico* se o app
+  for encerrado no meio da inferência.
 
 ## 4. Backup
 

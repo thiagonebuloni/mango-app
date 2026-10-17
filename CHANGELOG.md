@@ -10,6 +10,21 @@ release publicada.
 
 ### Adicionado
 
+- **Relatório por I.A. local** (aba Relatórios → *Gerar relatório mensal por
+  I.A.*): narra o período com um modelo leve rodando **no aparelho** (motor
+  LiteRT-LM via `flutter_edge_ai`/`flutter_edge_ai_litertlm`, streaming com
+  cancelamento real — `stopGeneration` —, teto de tokens e semente fixa).
+  Os números vêm do Dart (`relatorio_contexto.dart`) — o modelo só
+  narra, sem inventar valor — e o prompt segue o idioma do app. O modelo chega
+  por fora com `tool/install_modelo_ia.sh` (recomendado: Qwen3 0.6B
+  `.litertlm`, ~345 MB, Apache-2.0); sem modelo, a tela mostra as instruções e
+  a lista é atualizável. Aviso de memória livre em aparelho apertado.
+  **Nenhuma permissão nova**: o release continua sem internet e a geração
+  funciona offline. Testes do contexto, do prompt e da tela (narrador fake).
+- Geração de relatório interrompida aparece no *Diagnóstico*: uma marca de
+  disco é gravada antes de chamar o motor e apagada ao terminar — se o app
+  morrer no meio de uma falha nativa (nada de `catch` do Dart alcança isso),
+  a próxima abertura registra a falha com o modelo em uso.
 - Limite do cartão (opcional) no cadastro e na edição: a lista mostra a
   barra de uso + valor disponível, e o detalhe mostra disponível + % usada.
   Cartões antigos continuam sem limite; o limite viaja no backup CSV

@@ -109,6 +109,18 @@ a landing e a política de privacidade publicada — é a URL que vai no Play Co
   zoom (posição + zoom salvos no perfil, SQLite v5).
 - **Fallback IA (opcional):** `lib/services/ai_fallback.dart` documenta o ponto
   de extensão para Gemini Flash (camada gratuita), enviando só o texto do OCR.
+- **Relatório por I.A. (opcional, local):** o botão **"Relatório mensal por
+  I.A."** na aba Relatórios gera uma narrativa do período com um modelo leve
+  rodando **no próprio aparelho** (Flutter Edge AI + motor LiteRT-LM via
+  `flutter_edge_ai`/`flutter_edge_ai_litertlm`, com aceleração CPU/GPU/NPU
+  disponível). Os números vêm calculados em Dart
+  (`lib/services/relatorio_contexto.dart`) — o modelo **só narra**, sem chance
+  de inventar valor. O modelo chega por fora, com
+  `tool/install_modelo_ia.sh` (recomendado: Qwen3 0.6B em `.litertlm`,
+  ~345 MB, licença Apache-2.0 — leve o bastante para aparelhos com pouca RAM;
+  a tela avisa se a memória livre está apertada). Sem modelo instalado, o app
+  mostra como instalar; nenhuma permissão nova — o APK de release continua
+  sem internet, e a geração funciona offline.
 
 ## Requisitos
 
@@ -503,7 +515,13 @@ lib/
 │   ├── categorizer.dart       # regras por palavra-chave + memória
 │   ├── seguranca.dart         # PIN (PBKDF2-HMAC-SHA256) + biometria + trava por tentativas
 │   ├── crash_log.dart         # log local de falhas (falhas.jsonl) + fila
-│   └── ai_fallback.dart       # extensão opcional p/ IA (desligada por padrão)
+│   ├── ai_fallback.dart       # extensão opcional p/ IA (desligada por padrão)
+│   ├── ia_modelos.dart        # descoberta dos modelos LiteRT instalados
+│   ├── ia_narrador.dart       # narrador do relatório (LiteRT-LM local)
+│   ├── ia_andamento.dart      # marca de geração (crash nativo → Diagnóstico)
+│   ├── ia_aparelho.dart       # memória livre + pasta externa (canal nativo)
+│   ├── relatorio_contexto.dart  # números do período em JSON (o modelo só narra)
+│   └── relatorio_prompt.dart  # prompt do relatório no idioma do app
 ├── screens/
 │   ├── root_nav.dart          # abas Gastos / Relatórios (deslize)
 │   ├── splash_screen.dart     # tela de entrada: gradiente manga + nome
@@ -515,11 +533,12 @@ lib/
 │   ├── capture_screen.dart    # foto do cupom + OCR
 │   ├── expense_form_screen.dart   # confirmação/edição do gasto
 │   ├── reports_screen.dart    # relatórios por período
+│   ├── relatorio_ia_screen.dart # relatório narrado por I.A. local
 │   └── diagnostico_screen.dart # falhas locais: listar / compartilhar / limpar
 └── widgets/common.dart        # formatação BRL, ícones/cores, FAB, tiles
 
-test/                          # parser, parcelas, backup CSV, UI e auditorias (audit_probe*)
-tool/                          # generate_icon.py + install_release.sh (instala no usuário 0)
+test/                          # parser, parcelas, backup CSV, relatório por I.A., UI e auditorias (audit_probe*)
+tool/                          # generate_icon.py + install_release.sh + install_modelo_ia.sh (modelo LiteRT via adb)
 .github/workflows/ci.yml       # analyze + testes a cada push/PR (Flutter 3.47.5)
 .github/workflows/release.yml  # tag v*: build assinado + Release com o APK
 ```
