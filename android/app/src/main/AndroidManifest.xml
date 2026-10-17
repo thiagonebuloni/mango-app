@@ -27,7 +27,11 @@
          na nota, e o app promete dados 100% locais. O backup oficial é o CSV
          exportado pelo próprio app; a transferência direta entre aparelhos é
          mantida. Regras em res/xml/backup_rules.xml (API <= 30) e
-         res/xml/data_extraction_rules.xml (API >= 31). -->
+         res/xml/data_extraction_rules.xml (API >= 31).
+         Empacotamento das `.so` nativas: `packaging.jniLibs.useLegacyPackaging`
+         em `android/app/build.gradle.kts` — o motor LiteRT-LM (relatório por
+         I.A.) carrega libs extras (acelerador OpenCL) via dlopen; com as libs
+         extraídas no disco o caminho é sempre resolvível pelo linker. -->
     <application
         android:label="Mango"
         android:name="${applicationName}"

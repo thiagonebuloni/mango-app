@@ -17,6 +17,7 @@ import 'screens/lock_screen.dart';
 import 'screens/root_nav.dart';
 import 'screens/splash_screen.dart';
 import 'services/crash_log.dart';
+import 'services/ia_andamento.dart';
 import 'services/notificacoes.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
@@ -40,6 +41,10 @@ Future<void> main() async {
   // de abertura (banco/perfil) — que hoje sumiria só no logcat.
   await iniciarLogDeFalhas();
   instalarHandlersDeErro();
+  // Geração de relatório por I.A. que não terminou: o processo morreu no
+  // meio da inferência nativa (nenhum handler Dart alcança isso) — registra
+  // agora, antes do app continuar de onde parou. Best-effort.
+  await verificarGeracaoIaInterrompida();
   await DBHelper.instance.init();
   // O perfil é lido antes do primeiro frame para o app já abrir com a cor de
   // fundo do usuário (ver [perfilInicialProvider]).

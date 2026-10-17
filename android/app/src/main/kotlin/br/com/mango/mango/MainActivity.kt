@@ -1,5 +1,7 @@
 package br.com.mango.mango
 
+import android.app.ActivityManager
+import android.content.Context
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -18,6 +20,23 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Leituras do aparelho para o relatório por I.A. (memória livre e a
+        // pasta externa do app, alvo do tool/install_modelo_ia.sh). Só
+        // números/caminhos do sistema — nada sai do aparelho.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mango/aparelho")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "memoriaLivre" -> {
+                        val gerenciador =
+                            getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                        val info = ActivityManager.MemoryInfo()
+                        gerenciador.getMemoryInfo(info)
+                        result.success(info.availMem)
+                    }
+                    "pastaExterna" -> result.success(getExternalFilesDir(null)?.path)
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {

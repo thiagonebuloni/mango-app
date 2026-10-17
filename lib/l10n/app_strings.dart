@@ -333,6 +333,20 @@ abstract class AppStrings {
   String categoriaLabel(String name);
   String pagamentoLabel(String name);
   String tipoLabel(String name);
+  // Relatório por I.A. (análise gerada localmente, no aparelho)
+  String get relatorioPorIa;
+  String get gerarRelatorioIa;
+  String get iaSemModelo;
+  String get iaComoInstalarModelo;
+  String get iaAtualizar;
+  String iaMemoriaBaixa(String livres, String modelo);
+  String get iaGerando;
+  String iaErroRelatorio(String e);
+  String get iaGerarNovamente;
+  String get iaAvisoLocal;
+  String get iaSystemPrompt;
+  String iaPedidoRelatorio(String dados);
+
   String get temaClaro;
   String get temaEscuro;
   String get currencySymbol;

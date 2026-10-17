@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
+import '../services/ia_modelos.dart';
+import '../services/ia_narrador.dart';
 import '../services/receipt_parser.dart';
 import '../services/receipt_photo.dart';
 import '../services/seguranca.dart';
@@ -744,3 +746,18 @@ class TentativasNotifier extends AsyncNotifier<TentativasBloqueio> {
     state = const AsyncData(TentativasBloqueio());
   }
 }
+
+// ---------------- relatório por I.A. (local) ----------------
+
+/// Modelos LiteRT (`.litertlm`/`.task`) encontrados no aparelho (menor
+/// primeiro). Opcionalmente `invalidate` refaz a varredura — a tela faz isso
+/// depois que o usuário manda um arquivo por `tool/install_modelo_ia.sh`.
+final modelosIaProvider = FutureProvider<List<ModeloIa>>(
+  (ref) => descobrirModelosIa(),
+);
+
+/// Fábrica do narrador: a tela cria um narrador para o modelo escolhido.
+/// Os testes trocam este provedor por um fake, sem tocar em FFI.
+final fabricaNarradorIaProvider = Provider<NarradorIa Function(String)>(
+  (ref) => (caminho) => NarradorLiteRt(caminhoModelo: caminho),
+);

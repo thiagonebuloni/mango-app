@@ -11,6 +11,7 @@ import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'expense_form_screen.dart';
+import 'relatorio_ia_screen.dart';
 
 /// Abre a edição do gasto — mesmo caminho do toque na lista da tela de
 /// Gastos. Usado pelos cartões que organizam lançamentos (por dia, por
@@ -270,6 +271,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                // Relatório narrado por I.A. local: o modelo lê os números
+                // do período (calculados em Dart) e escreve o resumo no
+                // aparelho, sem rede. Só aparece com o que narrar.
+                if (inPeriodAll.isNotEmpty) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => RelatorioIaScreen(periodo: pr),
+                        ),
+                      ),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: Text(context.strings.gerarRelatorioIa),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _BalanceBarCard(
                   totalDespesas: total,
                   totalReceitas: totalReceitasPeriodo,

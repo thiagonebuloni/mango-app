@@ -91,6 +91,19 @@ android {
         versionName = flutter.versionName
     }
 
+    packaging {
+        // As `.so` saem do APK para o disco na instalação (empacotamento
+        // legado das jniLibs): o motor de I.A. (LiteRT-LM, relatório mensal)
+        // carrega bibliotecas nativas adicionais (acelerador OpenCL) via
+        // dlopen — com as libs extraídas o caminho é sempre resolvível pelo
+        // linker, sem depender do mapeamento direto do APK. É o equivalente
+        // moderno do antigo `android:extractNativeLibs="true"`, que o AGP
+        // atual rejeita no manifesto.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     signingConfigs {
         if (temChavePropria) {
             create("release") {
