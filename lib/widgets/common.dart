@@ -595,12 +595,16 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
   if (!await _confirmarExportacao(context)) return;
   if (!context.mounted) return;
   try {
-    final expenses = ref.read(expensesProvider).value ?? const <Expense>[];
+    // Espera os lançamentos carregarem do SQLite antes de exportar. Ler
+    // `.value` enquanto o provider está em AsyncLoading devolve null e
+    // geraria um backup sem lançamentos (o perfil aparece, mas não os
+    // gastos). `.future` completa quando os dados estão prontos.
+    final expenses = await ref.read(expensesProvider.future);
     final perfil = ref.read(profileProvider).value;
     // Cartões viajam junto (v3): sem eles no arquivo, os gastos no crédito
     // restauravam desvinculados no outro aparelho.
-    final cartoes = ref.read(cartoesProvider).value ?? const <CartaoCredito>[];
-    final csv = CsvBackup.export(
+    final cartoes = await ref.read(cartoesProvider.future);
+    final csv = await CsvBackup.export(
       expenses,
       perfil: perfil,
       cartoes: cartoes,
@@ -699,7 +703,7 @@ Future<void> _importarCsv(BuildContext context, WidgetRef ref) async {
   }
   CsvImportResult result;
   try {
-    result = CsvBackup.import(texto);
+    result = await CsvBackup.import(texto);
   } on CsvImportException catch (e) {
     messenger.showSnackBar(SnackBar(content: Text(e.message)));
     return;

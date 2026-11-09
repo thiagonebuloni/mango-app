@@ -175,7 +175,7 @@ void main() async {
 
   group('Backup CSV (exportar/importar)', () {
     test('exportar → importar preserva despesas, receitas e textos com ";"',
-        () {
+        () async {
       final originais = [
         Expense(
           valorCentavos: 12345,
@@ -195,7 +195,7 @@ void main() async {
         ),
       ];
 
-      final result = CsvBackup.import(CsvBackup.export(originais));
+      final result = await CsvBackup.import(await CsvBackup.export(originais));
 
       expect(result.skipped, 0);
       expect(result.expenses, hasLength(2));
@@ -213,13 +213,13 @@ void main() async {
       expect(receita.estabelecimento, 'SALÁRIO');
     });
 
-    test('linhas inválidas são ignoradas (skipped)', () {
-      final result = CsvBackup.import('${CsvBackup.header}\nso um campo');
+    test('linhas inválidas são ignoradas (skipped)', () async {
+      final result = await CsvBackup.import('${CsvBackup.header}\nso um campo');
       expect(result.expenses, isEmpty);
       expect(result.skipped, 1);
     });
 
-    test('chave de duplicidade sobrevive ao export/import (agregação)', () {
+    test('chave de duplicidade sobrevive ao export/import (agregação)', () async {
       final original = Expense(
         valorCentavos: 12345,
         dataHora: DateTime(2026, 8, 20, 9, 30, 15, 250),
@@ -229,7 +229,9 @@ void main() async {
         estabelecimento: 'MERCADO "BOM" LTDA',
       );
       final reimportado =
-          CsvBackup.import(CsvBackup.export([original])).expenses.single;
+          (await CsvBackup.import(await CsvBackup.export([original])))
+              .expenses
+              .single;
 
       // Mesmo registro → mesma chave: a importação agrega sem duplicar.
       expect(reimportado.chaveUnica, original.chaveUnica);

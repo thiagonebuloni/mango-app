@@ -146,7 +146,7 @@ void main() {
   });
 
   group('CsvBackup.import com entradas maliciosas', () {
-    test('campos com aspas e valores extremos', () {
+    test('campos com aspas e valores extremos', () async {
       final lines = [
         '# MANGO_BACKUP v2',
         '# PERFIL;nome="${'N' * 100000}";avatar=😀;cor=4294967295;tema=claro',
@@ -160,7 +160,7 @@ void main() {
         '"aspas inabaláveis \'" "',
         'tipo;valor;data_hora;categoria;forma;descricao;estabelecimento;origem',
       ];
-      final r = CsvBackup.import(lines.join('\n'));
+      final r = await CsvBackup.import(lines.join('\n'));
       // ignore: avoid_print
       print('import: ${r.expenses.length} gastos, ${r.skipped} pulados, '
           'perfil=${r.perfil?.nome}');
@@ -171,14 +171,14 @@ void main() {
       expect(r.perfil?.corFundo, 0xFFFFFFFF);
     });
 
-    test('perfil com cor inválida não quebra', () {
+    test('perfil com cor inválida não quebra', () async {
       for (final cor in [
         'abc', '-1', '999999999999999999999999', '', '4294967296', '0',
       ]) {
         final csv = '# MANGO_BACKUP v2\n# PERFIL;nome=X;avatar=Y;cor=$cor;'
             'tema=claro\ntipo;valor;data_hora;categoria;forma;descricao;'
             'estabelecimento;origem';
-        final r = CsvBackup.import(csv);
+        final r = await CsvBackup.import(csv);
         // ignore: avoid_print
         print('cor="$cor" -> perfil.cor=${r.perfil?.corFundo}');
         // A4: vira o padrão e o fundo segue visível (alpha 255) — valores
@@ -256,11 +256,11 @@ void main() {
       print('recusa: $recusa');
     });
 
-    test('texto gigante é recusado sem travar o app', () {
+    test('texto gigante é recusado sem travar o app', () async {
       final gigante = 'x' * (CsvBackup.maxBytes + 1);
       Object? erro;
       try {
-        CsvBackup.import(gigante);
+        await CsvBackup.import(gigante);
       } catch (e) {
         erro = e;
       }
@@ -270,18 +270,19 @@ void main() {
       expect((erro as CsvImportException).message, contains('16 MB'));
     });
 
-    test('arquivo de linhas minúsculas (sem fim) também é recusado', () {
+    test('arquivo de linhas minúsculas (sem fim) também é recusado', () async {
       final muitasLinhas = 'a\n' * (CsvBackup.maxLines + 1);
       expect(
         () => CsvBackup.import(muitasLinhas),
         throwsA(isA<CsvImportException>()),
       );
       // No limite ainda passa: linhas inválidas viram "ignoradas", sem erro.
-      expect(CsvBackup.import('a\n' * CsvBackup.maxLines).expenses, isEmpty);
+      expect((await CsvBackup.import('a\n' * CsvBackup.maxLines)).expenses,
+          isEmpty);
     });
 
     test('lerBackupCsv remonta os blocos e sobrevive a UTF-8 cortado', () async {
-      final csv = CsvBackup.export([_base(estabelecimento: 'PADARIA AÇÃO')]);
+      final csv = await CsvBackup.export([_base(estabelecimento: 'PADARIA AÇÃO')]);
       final bytes = utf8.encode(csv);
       final corte = bytes.indexWhere((b) => b >= 0x80) + 1;
       expect(corte, greaterThan(0), reason: 'teste precisa de acento no CSV');
@@ -289,7 +290,8 @@ void main() {
         Stream.fromIterable([bytes.sublist(0, corte), bytes.sublist(corte)]),
       );
       expect(texto, csv);
-      final lancamento = CsvBackup.import(texto).expenses.single;
+      final lancamento =
+          (await CsvBackup.import(texto)).expenses.single;
       expect(lancamento.estabelecimento, 'PADARIA AÇÃO');
     });
 
@@ -316,7 +318,7 @@ void main() {
     test('fluxo vazio vira texto vazio, sem lançar', () async {
       final texto = await lerBackupCsv(Stream<List<int>>.empty());
       expect(texto, isEmpty);
-      expect(CsvBackup.import(texto).expenses, isEmpty);
+      expect((await CsvBackup.import(texto)).expenses, isEmpty);
     });
   });
 
@@ -327,33 +329,33 @@ void main() {
     String csvDe(String campos) =>
         '${CsvBackup.backupMarker}\n# PERFIL;$campos\n${CsvBackup.header}';
 
-    UserProfile perfilDe(String campos) =>
-        CsvBackup.import(csvDe(campos)).perfil!;
+    Future<UserProfile> perfilDe(String campos) async =>
+        (await CsvBackup.import(csvDe(campos))).perfil!;
 
-    test('nome gigante entra cortado no limite da tela de perfil', () {
-      final p = perfilDe('nome="${'N' * 100000}";avatar=😀;cor=4280171103');
+    test('nome gigante entra cortado no limite da tela de perfil', () async {
+      final p = await perfilDe('nome="${'N' * 100000}";avatar=😀;cor=4280171103');
       expect(p.nome, 'N' * UserProfile.nomeMaxLength);
     });
 
-    test('nome com caracteres de controle vira texto limpo', () {
-      final p = perfilDe(
+    test('nome com caracteres de controle vira texto limpo', () async {
+      final p = await perfilDe(
         'nome="  Ana\t\u0007Souza\u0001";avatar=😀;cor=4280171103',
       );
       expect(p.nome, 'Ana Souza');
     });
 
-    test('corte do nome não parte um emoji no meio', () {
+    test('corte do nome não parte um emoji no meio', () async {
       // Cada 🐸 ocupa 2 unidades UTF-16: cortar por unidades deixaria um
       // par substituto solto (caractere inválido no meio do nome).
-      final p = perfilDe('nome="${'🐸' * 40}";avatar=😀;cor=4280171103');
+      final p = await perfilDe('nome="${'🐸' * 40}";avatar=😀;cor=4280171103');
       expect(p.nome.runes.length, UserProfile.nomeMaxLength);
       expect(p.nome.length, UserProfile.nomeMaxLength * 2);
       expect(p.nome, '🐸' * UserProfile.nomeMaxLength);
     });
 
-    test('cor transparente ou fora de 32 bits vira o padrão opaco', () {
+    test('cor transparente ou fora de 32 bits vira o padrão opaco', () async {
       for (final cor in ['0', '4294967296', '2130771967', '-1', 'abc', '']) {
-        final p = perfilDe('nome=Ana;avatar=😀;cor=$cor');
+        final p = await perfilDe('nome=Ana;avatar=😀;cor=$cor');
         expect(
           p.corFundo,
           UserProfile.corFundoInicialPadrao,
@@ -363,27 +365,30 @@ void main() {
       }
     });
 
-    test('cor opaca válida continua valendo', () {
+    test('cor opaca válida continua valendo', () async {
       for (final cor in ['4280171103', '4294967295', '4278252193']) {
-        expect(perfilDe('nome=Ana;cor=$cor').corFundo, int.parse(cor));
+        expect(
+          (await perfilDe('nome=Ana;cor=$cor')).corFundo,
+          int.parse(cor),
+        );
       }
     });
 
-    test('avatar gigante entra cortado', () {
-      final p = perfilDe('nome=Ana;avatar="${'😀' * 500}";cor=4280171103');
+    test('avatar gigante entra cortado', () async {
+      final p = await perfilDe('nome=Ana;avatar="${'😀' * 500}";cor=4280171103');
       expect(p.avatar.runes.length, UserProfile.avatarMaxLength);
     });
 
-    test('perfil dentro dos limites continua com round-trip exato', () {
+    test('perfil dentro dos limites continua com round-trip exato', () async {
       const original = UserProfile(
         nome: 'Ana Souza',
         avatar: '🦊',
         corFundo: 0xFF1E3A5F,
         temaClaro: true,
       );
-      final lido = CsvBackup.import(
-        CsvBackup.export([_base()], perfil: original),
-      ).perfil!;
+      final lido = (await CsvBackup.import(
+        await CsvBackup.export([_base()], perfil: original),
+      )).perfil!;
       expect(lido.nome, original.nome);
       expect(lido.avatar, original.avatar);
       expect(lido.corFundo, original.corFundo);

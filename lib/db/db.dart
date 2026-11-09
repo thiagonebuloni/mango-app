@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/models.dart';
@@ -459,6 +461,10 @@ class CsvBackup {
   static const backupMarker = '# MANGO_BACKUP v3';
   static const perfilMarker = '# PERFIL;';
   static const cartaoMarker = '# CARTAO;';
+  /// Chave do campo que carrega a foto do avatar em base64 dentro da linha
+  /// `# PERFIL;...`. Quando presente, o import decodifica e grava o arquivo
+  /// local antes de restaurar o perfil.
+  static const avatarB64Key = 'avatar_b64';
 
   /// Aviso gravado no topo de todo arquivo exportado: o backup é **texto
   /// puro, sem senha**.
@@ -507,10 +513,14 @@ class CsvBackup {
   /// Serializa os lançamentos para o texto CSV, incluindo [perfil] e [cartoes]
   /// no topo (v3). Nomes de cartão no mapa religam cada gasto no crédito ao
   /// cartão certo na restauração; fora do mapa, sai `cartao` vazio.
-  static String export(List<Expense> expenses,
+  ///
+  /// Quando o perfil tem uma foto de avatar (`avatarImagePath`), o arquivo é
+  /// lido e gravado como base64 no campo `avatar_b64` da linha `# PERFIL;`,
+  /// para que o backup seja autocontido (sem depender de caminho local).
+  static Future<String> export(List<Expense> expenses,
       {UserProfile? perfil,
       List<CartaoCredito> cartoes = const [],
-      Map<int, String> nomesCartoes = const {}}) {
+      Map<int, String> nomesCartoes = const {}}) async {
     final sorted = expenses.toList()
       ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
     final buf = StringBuffer(backupMarker);
@@ -531,6 +541,20 @@ class CsvBackup {
         ..write(perfil.corFundo)
         ..write(';tema=')
         ..write(perfil.temaClaro ? 'claro' : 'escuro');
+      // Foto do avatar (quando há): lê o arquivo local e grava como base64,
+      // para o backup não depender de um caminho que só existe neste
+      // aparelho. Falha silenciosamente se não conseguir ler o arquivo.
+      final avatarPath = perfil.avatarImagePath;
+      if (avatarPath != null && avatarPath.trim().isNotEmpty) {
+        try {
+          final bytes = await File(avatarPath).readAsBytes();
+          buf
+            ..write(';$avatarB64Key=')
+            ..write(_esc(base64Encode(bytes)));
+        } catch (_) {
+          // ignora: o perfil continua restaurado com o emoticon
+        }
+      }
     }
     final ordenados = cartoes.toList()
       ..sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
@@ -590,7 +614,11 @@ class CsvBackup {
   /// O vínculo gasto→cartão viaja pelo **nome** (`cartaoPorNome`): ids do banco
   /// de outro aparelho não valem nada aqui — quem importa religa pelo nome
   /// depois de fundir os cartões.
-  static CsvImportResult import(String csvText) {
+  ///
+  /// Quando a linha `# PERFIL;` traz `avatar_b64`, a foto é decodificada e
+  /// gravada nos documentos do app antes de montar o perfil, para que a
+  /// restauração recupere a imagem mesmo sem o caminho original.
+  static Future<CsvImportResult> import(String csvText) async {
     _verificarLimites(csvText);
     final lines = const LineSplitter().convert(csvText.trim());
     if (lines.isEmpty) {
@@ -607,7 +635,20 @@ class CsvBackup {
       if (line.isEmpty) continue;
       if (line.startsWith('#')) {
         final parsed = _parsePerfilLine(line);
-        if (parsed != null) perfil = parsed;
+        if (parsed != null) {
+          perfil = parsed;
+          // Foto do avatar em base64 (quando presente): decodifica e grava o
+          // arquivo local, atualizando o caminho do perfil restaurado.
+          final resto = line.substring(perfilMarker.length);
+          final campos = _splitPerfilFields(resto);
+          final b64 = (campos[avatarB64Key] ?? '').trim();
+          if (b64.isNotEmpty) {
+            final caminho = await _salvarAvatarBase64(b64);
+            if (caminho != null) {
+              perfil = perfil.copyWith(avatarImagePath: () => caminho);
+            }
+          }
+        }
         final cartao = _parseCartaoLine(line);
         if (cartao != null) cartoes.add(cartao);
         continue;
@@ -661,6 +702,28 @@ class CsvBackup {
           );
         }
       }
+    }
+  }
+
+  /// Decodifica [b64], grava a imagem nos documentos do app e devolve o
+  /// caminho. Retorna `null` se o base64 for inválido ou a gravação falhar.
+  static Future<String?> _salvarAvatarBase64(String b64) async {
+    try {
+      final bytes = base64Decode(b64);
+      Directory dir;
+      try {
+        dir = await getApplicationDocumentsDirectory();
+      } catch (_) {
+        // Em ambientes sem binding do Flutter (ex.: testes unitários),
+        // cai para o diretório temporário do sistema.
+        dir = Directory.systemTemp;
+      }
+      final caminho =
+          '${dir.path}/mango_avatar_${DateTime.now().millisecondsSinceEpoch}.png';
+      await File(caminho).writeAsBytes(bytes, flush: true);
+      return caminho;
+    } catch (_) {
+      return null;
     }
   }
 

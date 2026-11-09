@@ -65,7 +65,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
       }
       CsvImportResult result;
       try {
-        result = CsvBackup.import(texto);
+        result = await CsvBackup.import(texto);
       } on CsvImportException catch (e) {
         messenger.showSnackBar(SnackBar(content: Text(e.message)));
         return;

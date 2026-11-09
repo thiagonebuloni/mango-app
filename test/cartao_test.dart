@@ -253,8 +253,8 @@ void main() {
   });
 
   group('backup CSV com cartões', () {
-    test('export → import mantém cartão e vínculo pelo nome', () {
-      final csv = CsvBackup.export(
+    test('export → import mantém cartão e vínculo pelo nome', () async {
+      final csv = await CsvBackup.export(
         [_gasto(centavos: 1234, data: DateTime(2026, 3, 10), cartaoId: 1)],
         cartoes: const [_cartao],
         nomesCartoes: const {1: 'Viagem'},
@@ -262,7 +262,7 @@ void main() {
       expect(csv, contains(CsvBackup.cartaoMarker));
       expect(csv, contains(CsvBackup.header));
 
-      final r = CsvBackup.import(csv);
+      final r = await CsvBackup.import(csv);
       expect(r.cartoes, hasLength(1));
       expect(r.cartoes.first.banco, 'Nubank');
       expect(r.cartoes.first.bandeira, BandeiraCartao.mastercard);
@@ -277,7 +277,7 @@ void main() {
       expect(r.cartaoPorNome.keys, ['Viagem']);
     });
 
-    test('export → import preserva o limite do cartão', () {
+    test('export → import preserva o limite do cartão', () async {
       const comLimite = CartaoCredito(
         banco: 'Nubank',
         bandeira: BandeiraCartao.mastercard,
@@ -286,32 +286,33 @@ void main() {
         diaPagamento: 27,
         limiteCentavos: 500000,
       );
-      final csv = CsvBackup.export(const [], cartoes: const [comLimite]);
+      final csv = await CsvBackup.export(const [], cartoes: const [comLimite]);
       expect(csv, contains(';limite=500000'));
-      expect(CsvBackup.import(csv).cartoes.single.limiteCentavos, 500000);
+      expect((await CsvBackup.import(csv)).cartoes.single.limiteCentavos,
+          500000);
     });
 
-    test('linha antiga sem limite continua válida', () {
-      final r = CsvBackup.import(
+    test('linha antiga sem limite continua válida', () async {
+      final r = await CsvBackup.import(
         '# CARTAO;banco=Nubank;bandeira=mastercard;nome=Viagem;fechamento=20;'
         'pagamento=27\n${CsvBackup.header}',
       );
       expect(r.cartoes.single.limiteCentavos, isNull);
     });
 
-    test('limite inválido derruba só a linha do cartão', () {
-      final r = CsvBackup.import(
+    test('limite inválido derruba só a linha do cartão', () async {
+      final r = await CsvBackup.import(
         '# CARTAO;banco=Nubank;bandeira=mastercard;nome=Viagem;fechamento=20;'
         'pagamento=27;limite=abc\n${CsvBackup.header}',
       );
       expect(r.cartoes, isEmpty);
     });
 
-    test('linha de cartão inválida é ignorada sem derrubar o import', () {
+    test('linha de cartão inválida é ignorada sem derrubar o import', () async {
       final csv =
           '# CARTAO;banco=;bandeira=visa;nome=X;fechamento=40;'
           'pagamento=0\n${CsvBackup.header}';
-      final r = CsvBackup.import(csv);
+      final r = await CsvBackup.import(csv);
       expect(r.cartoes, isEmpty);
       expect(r.expenses, isEmpty);
       expect(r.skipped, 0);
