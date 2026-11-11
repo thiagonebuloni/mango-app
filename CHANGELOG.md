@@ -6,7 +6,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/) — o `+N` do
 `pubspec.yaml` é o *build number* do Android e **precisa** aumentar a cada
 release publicada.
 
-## [Não lançado]
+## [1.5.0] - 2026-11-09
 
 ### Adicionado
 
