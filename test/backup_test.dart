@@ -128,5 +128,20 @@ void main() {
       expect(await restaurado.exists(), isTrue);
       expect(await restaurado.readAsBytes(), equals(await arquivo.readAsBytes()));
     });
+
+    test('export falha explicitamente se a foto do avatar não puder ser lida',
+        () async {
+      final perfilComFoto = UserProfile(
+        nome: 'Ana Souza',
+        avatar: '🦊',
+        corFundo: 0xFF1E3A5F,
+        avatarImagePath: '${Directory.systemTemp.path}/avatar-inexistente.png',
+      );
+
+      expect(
+        () => CsvBackup.export([gasto()], perfil: perfilComFoto),
+        throwsA(isA<FileSystemException>()),
+      );
+    });
   });
 }

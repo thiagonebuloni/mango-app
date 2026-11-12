@@ -600,7 +600,9 @@ Future<void> _exportarCsv(BuildContext context, WidgetRef ref) async {
     // geraria um backup sem lançamentos (o perfil aparece, mas não os
     // gastos). `.future` completa quando os dados estão prontos.
     final expenses = await ref.read(expensesProvider.future);
-    final perfil = ref.read(profileProvider).value;
+    // O provider do perfil pode ainda estar carregando; exportar com `.value`
+    // nesse estado omite a linha de perfil e, consequentemente, o avatar.
+    final perfil = await ref.read(profileProvider.future);
     // Cartões viajam junto (v3): sem eles no arquivo, os gastos no crédito
     // restauravam desvinculados no outro aparelho.
     final cartoes = await ref.read(cartoesProvider.future);
@@ -790,4 +792,3 @@ Future<void> _sobre(BuildContext context) async {
     ],
   );
 }
-

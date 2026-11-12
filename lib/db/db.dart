@@ -436,10 +436,10 @@ class DBHelper {
 /// Linhas `#` (ex.: `# MANGO_BACKUP v3`, `# AVISO;...`, `# PERFIL;...` e
 /// `# CARTAO;...`) são comentários: ignoradas por planilhas e por backups
 /// antigos. O perfil guarda `nome/avatar/corFundo (ARGB)/tema (claro|escuro)`;
-/// a foto do avatar não entra no backup (caminho local) e deve ser recolocada
-/// na edição final. Cada linha `# CARTAO;...` guarda um cartão de crédito
-/// (nada de dado sensível: só banco, bandeira, nome e dias de fechamento e
-/// pagamento) — os gastos no crédito religam ao cartão pelo **nome**
+/// quando há foto, seus bytes são incluídos em base64 (`avatar_b64`), sem
+/// depender do caminho local. Cada linha `# CARTAO;...` guarda um cartão de
+/// crédito (nada de dado sensível: só banco, bandeira, nome e dias de
+/// fechamento e pagamento) — os gastos no crédito religam ao cartão pelo **nome**
 /// (coluna `cartao`), então cartões e gastos viajam juntos na troca de
 /// aparelho.
 ///
@@ -541,19 +541,14 @@ class CsvBackup {
         ..write(perfil.corFundo)
         ..write(';tema=')
         ..write(perfil.temaClaro ? 'claro' : 'escuro');
-      // Foto do avatar (quando há): lê o arquivo local e grava como base64,
-      // para o backup não depender de um caminho que só existe neste
-      // aparelho. Falha silenciosamente se não conseguir ler o arquivo.
+      // A foto é parte do backup. Se o caminho persistido não puder ser lido,
+      // falha a exportação em vez de gerar um backup incompleto sem aviso.
       final avatarPath = perfil.avatarImagePath;
       if (avatarPath != null && avatarPath.trim().isNotEmpty) {
-        try {
-          final bytes = await File(avatarPath).readAsBytes();
-          buf
-            ..write(';$avatarB64Key=')
-            ..write(_esc(base64Encode(bytes)));
-        } catch (_) {
-          // ignora: o perfil continua restaurado com o emoticon
-        }
+        final bytes = await File(avatarPath).readAsBytes();
+        buf
+          ..write(';$avatarB64Key=')
+          ..write(_esc(base64Encode(bytes)));
       }
     }
     final ordenados = cartoes.toList()
